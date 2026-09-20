@@ -1,0 +1,180 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../layouts/Base.astro";
+import { isoDay } from "../lib/display";
+
+const WEEKS = 26;
+const now = new Date();
+
+const [tasks, projects] = await Promise.all([
+  getCollection("tasks"),
+  getCollection("projects"),
+]);
+
+const done = tasks.filter((t) => t.data.completed);
+const open = tasks.filter((t) => !t.data.completed);
+
+/** Monday of the ISO week containing `date`, at UTC midnight. */
+function weekStart(date: Date): Date {
+  const d = new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
+  );
+  // getUTCDay is 0 on Sunday, which belongs to the week that began six days
+  // earlier rather than to the one starting the next day.
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d;
+}
+
+const buckets: Array<{ start: Date; count: number }> = [];
+const thisWeek = weekStart(now);
+for (let i = WEEKS - 1; i >= 0; i--) {
+  const start = new Date(thisWeek);
+  start.setUTCDate(start.getUTCDate() - i * 7);
+  buckets.push({ start, count: 0 });
+}
+const firstBucket = buckets[0].start.getTime();
+
+for (const task of done) {
+  const when = task.data.lastmod;
+  if (!when || when.getTime() < firstBucket) continue;
+  const start = weekStart(when).getTime();
+  const bucket = buckets.find((b) => b.start.getTime() === start);
+  if (bucket) bucket.count++;
+}
+const peak = Math.max(1, ...buckets.map((b) => b.count));
+const inWindow = buckets.reduce((sum, b) => sum + b.count, 0);
+
+function tally(values: string[]): Array<[string, number]> {
+  const counts = new Map<string, number>();
+  for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+}
+
+const byType = tally(tasks.map((t) => t.data.type ?? "unspecified"));
+const byPriority = tally(
+  tasks.map((t) => t.data.priority).map((p) => (p === "Unspecified" ? "unspecified" : p)),
+);
+const byStatus = tally(open.map((t) => t.data.status));
+
+const busiest = [...projects]
+  .sort((a, b) => b.data.completedCount - a.data.completedCount)
+  .slice(0, 10);
+
+const share = (n: number, total: number) =>
+  total === 0 ? "0%" : `${Math.round((n / total) * 100)}%`;
+---
+
+<Base
+  title="Backlog statistics"
+  description={`Completion over time and the shape of ${tasks.length} tracked tasks across ${projects.length} public repositories.`}
+>
+  <p class="breadcrumb"><a href="/">Projects</a> / Statistics</p>
+  <p class="eyebrow">Statistics</p>
+  <h1>The shape of the work.</h1>
+  <p class="lede">
+    {tasks.length} tracked tasks across {projects.length} repositories: {open.length} open,
+    {done.length} completed. Everything here is counted from the trackers themselves at build
+    time.
+  </p>
+
+  <h2>Completed per week</h2>
+  <p class="results">
+    {inWindow} in the last {WEEKS} weeks &middot; busiest week {peak}
+  </p>
+  {/* A task carries no completion timestamp of its own, so this uses the last
+      time the record changed. For a Done task that is almost always the edit
+      that closed it, but a later correction moves it, and a task finished
+      before it was first published lands on the day it was imported. */}
+  {/* The bars carry no text, and a title attribute is not read out. The table
+      below is the accessible copy of the same numbers, so the chart itself is
+      marked decorative rather than given a label it cannot live up to. */}
+  <div class="chart" aria-hidden="true">
+    {
+      buckets.map((bucket) => (
+        <span
+          class="bar"
+          style={`--h:${Math.round((bucket.count / peak) * 100)}%`}
+          title={`Week of ${isoDay(bucket.start)}: ${bucket.count} completed`}
+        />
+      ))
+    }
+  </div>
+  <p class="results">
+    <time datetime={isoDay(buckets[0].start)}>{isoDay(buckets[0].start)}</time> to
+    <time datetime={isoDay(now)}>{isoDay(now)}</time>. Dated from each record's last change,
+    which for a completed task is normally the edit that closed it.
+  </p>
+
+  <details class="figures">
+    <summary>Weekly figures</summary>
+    <table>
+      <caption>Tasks completed per week, {WEEKS} weeks to {isoDay(now)}</caption>
+      <thead>
+        <tr>
+          <th scope="col">Week beginning</th>
+          <th scope="col">Completed</th>
+        </tr>
+      </thead>
+      <tbody>
+        {
+          buckets.map((bucket) => (
+            <tr>
+              <th scope="row">
+                <time datetime={isoDay(bucket.start)}>{isoDay(bucket.start)}</time>
+              </th>
+              <td>{bucket.count}</td>
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </details>
+
+  <h2>By type</h2>
+  <ul class="meta-list">
+    {
+      byType.map(([name, count]) => (
+        <li>
+          <strong>{name}:</strong> {count} ({share(count, tasks.length)})
+        </li>
+      ))
+    }
+  </ul>
+
+  <h2>By priority</h2>
+  <ul class="meta-list">
+    {
+      byPriority.map(([name, count]) => (
+        <li>
+          <strong>{name}:</strong> {count} ({share(count, tasks.length)})
+        </li>
+      ))
+    }
+  </ul>
+
+  <h2>Open work by status</h2>
+  <ul class="meta-list">
+    {
+      byStatus.map(([name, count]) => (
+        <li>
+          <strong>{name}:</strong> {count} ({share(count, open.length)})
+        </li>
+      ))
+    }
+  </ul>
+  {byStatus.length === 0 && <p class="lede">Nothing open anywhere.</p>}
+
+  <h2>Most completed work</h2>
+  <ul class="meta-list">
+    {
+      busiest.map((project) => (
+        <li>
+          <strong>
+            <a href={`/${project.data.path}/`}>{project.data.slug}</a>:
+          </strong>{" "}
+          {project.data.completedCount} completed, {project.data.openCount} open
+        </li>
+      ))
+    }
+  </ul>
+</Base>

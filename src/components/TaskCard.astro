@@ -1,35 +1,68 @@
 ---
+import type { AcceptanceProgress } from "../lib/backlog";
+
 interface Props {
+  /** URL segment of the project, which is not always its name. */
   project: string;
+  /** Display name, where it differs from the segment. */
+  projectLabel?: string;
   taskId: string;
   title: string;
   status: string;
   priority: string;
   labels: string[];
   milestone: string | null;
+  type?: string | null;
+  acceptance?: AcceptanceProgress | null;
+  /** Fleet-wide views mix projects, so the card has to say which one it is. */
+  showProject?: boolean;
 }
 
-const { project, taskId, title, status, priority, labels, milestone } = Astro.props;
+const {
+  project,
+  projectLabel = Astro.props.project,
+  taskId,
+  title,
+  status,
+  priority,
+  labels,
+  milestone,
+  type = null,
+  acceptance = null,
+  showProject = false,
+} = Astro.props;
 
 // The filter script reads these off the element. Labels go as JSON because a
 // label may legitimately contain a comma, which a delimited list would split.
 const priorityClass = `prio-${priority.toLowerCase().replace(/[^a-z]/g, "")}`;
+const done = acceptance?.total ? acceptance.checked === acceptance.total : false;
 ---
 
 <a
   class="task"
   href={`/${project}/tasks/${encodeURIComponent(taskId)}/`}
   data-task
+  data-project={projectLabel}
+  data-status={status}
   data-priority={priority}
+  data-type={type ?? ""}
   data-labels={JSON.stringify(labels)}
   data-milestone={milestone ?? "Unassigned"}
   data-title={title.toLowerCase()}
   data-id={taskId.toLowerCase()}
 >
-  <span class="id">{taskId}</span>
+  <span class="id">{showProject ? `${projectLabel} · ${taskId}` : taskId}</span>
   <span class="title">{title}</span>
   <span class="task-meta">
     <span class={priorityClass}>{priority}</span>
+    {type && <span class="kind">{type}</span>}
+    {
+      acceptance && (
+        <span class:list={["ac", done && "ac-done"]} title="Acceptance criteria met">
+          {acceptance.checked}/{acceptance.total} AC
+        </span>
+      )
+    }
     {milestone && milestone !== "Unassigned" && <span>{milestone}</span>}
     {labels.map((label) => <span class="tag">{label}</span>)}
   </span>

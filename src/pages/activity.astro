@@ -1,0 +1,110 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../layouts/Base.astro";
+import { isoDay, relativeTime, recordHref } from "../lib/display";
+
+const now = new Date();
+// How many records the feed carries. Every record already has its own page, so
+// this is a window onto recent movement rather than an archive: the sitemap and
+// the boards are what make the whole corpus reachable.
+const LIMIT = 250;
+
+const [tasks, docs, decisions] = await Promise.all([
+  getCollection("tasks"),
+  getCollection("trackerDocs"),
+  getCollection("decisions"),
+]);
+
+type Row = {
+  project: string;
+  projectPath: string;
+  id: string;
+  title: string;
+  kind: "tasks" | "docs" | "decisions";
+  status: string;
+  completed: boolean;
+  lastmod: Date;
+};
+
+const rows: Row[] = [
+  ...tasks.map((t) => ({ entry: t, kind: "tasks" as const })),
+  ...docs.map((t) => ({ entry: t, kind: "docs" as const })),
+  ...decisions.map((t) => ({ entry: t, kind: "decisions" as const })),
+]
+  .filter(({ entry }) => entry.data.lastmod instanceof Date)
+  .map(({ entry, kind }) => ({
+    project: entry.data.project,
+    projectPath: entry.data.projectPath,
+    id: entry.data.taskId,
+    title: entry.data.title,
+    kind,
+    status: entry.data.status,
+    completed: entry.data.completed,
+    lastmod: entry.data.lastmod as Date,
+  }))
+  .sort(
+    (a, b) =>
+      b.lastmod.getTime() - a.lastmod.getTime() ||
+      a.project.localeCompare(b.project) ||
+      a.id.localeCompare(b.id),
+  )
+  .slice(0, LIMIT);
+
+// Grouped by day. A flat list of 250 timestamps is unreadable, and the day is
+// the granularity the source actually records reliably.
+const byDay = new Map<string, Row[]>();
+for (const row of rows) {
+  const day = isoDay(row.lastmod);
+  if (!byDay.has(day)) byDay.set(day, []);
+  byDay.get(day)!.push(row);
+}
+const days = [...byDay.entries()];
+const newest = rows[0]?.lastmod ?? null;
+---
+
+<Base
+  title="Recent activity"
+  description={`The ${rows.length} most recently changed records across every published tracker.`}
+>
+  <p class="breadcrumb"><a href="/">Projects</a> / Activity</p>
+  <p class="eyebrow">Activity</p>
+  <h1>What moved recently.</h1>
+  <p class="lede">
+    The {rows.length} most recently changed tasks, documents and decisions across every
+    published tracker{newest && <> - the latest {relativeTime(newest, now)}</>}. Dates come
+    from each record's own front matter, not from when this page was built.
+  </p>
+
+  {
+    days.map(([day, items]) => (
+      <section style="margin-bottom: var(--space-8)">
+        <h2>
+          <time datetime={day}>{day}</time>
+          <span class="count">{items.length}</span>
+        </h2>
+        <div class="board" data-view="list">
+          <section class="column">
+            <div class="column-items">
+              {items.map((row) => (
+                <a class="task" href={recordHref(row.projectPath, row.kind, row.id)}>
+                  <span class="id">
+                    {row.project} &middot; {row.id}
+                  </span>
+                  <span class="title">{row.title}</span>
+                  <span class="task-meta">
+                    <span class="kind">
+                      {row.kind === "tasks" ? "task" : row.kind.replace(/s$/, "")}
+                    </span>
+                    <span>{row.completed ? "Done" : row.status}</span>
+                  </span>
+                </a>
+              ))}
+            </div>
+          </section>
+        </div>
+      </section>
+    ))
+  }
+
+  {rows.length === 0 && <p class="lede">No dated records to show.</p>}
+</Base>

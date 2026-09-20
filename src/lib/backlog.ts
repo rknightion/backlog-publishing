@@ -36,6 +36,45 @@ const SECTION_MARKERS =
 
 const FRONT_MATTER = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/;
 
+// The acceptance-criteria block, by its own markers. Parsing by heading would
+// be wrong: the Definition of Done section uses identical `- [x] #N` syntax, so
+// a heading-agnostic count of checkboxes reports a number nobody asked for.
+const AC_BLOCK = /<!--\s*AC:BEGIN\s*-->([\s\S]*?)<!--\s*AC:END\s*-->/;
+const AC_HEADING = /^##[ \t]+Acceptance Criteria\b[ \t]*\r?$/m;
+const NEXT_HEADING = /^##[ \t]/m;
+const CHECKBOX = /^[ \t]*[-*][ \t]+\[([ xX])\]/gm;
+
+/**
+ * Acceptance-criteria progress, counted from the raw body.
+ *
+ * Must run before `SECTION_MARKERS` strips the comments, which is why it lives
+ * here rather than anywhere that sees a rendered record.
+ */
+export function acceptanceProgress(rawBody: string): AcceptanceProgress | null {
+  let block = AC_BLOCK.exec(rawBody)?.[1];
+  if (block === undefined) {
+    // A broken marker makes Backlog.md drop the section on its next write, so
+    // a tracker can legitimately arrive with the heading and no comments. Read
+    // from the heading to the next one - a lazy match to `$` under /m stops at
+    // the first line ending and counts exactly one criterion, always.
+    const at = rawBody.search(AC_HEADING);
+    if (at < 0) return null;
+    const after = rawBody.slice(at).replace(/^.*\r?\n/, "");
+    const next = after.search(NEXT_HEADING);
+    block = next < 0 ? after : after.slice(0, next);
+  }
+
+  let checked = 0;
+  let total = 0;
+  for (const match of block.matchAll(CHECKBOX)) {
+    total++;
+    if (match[1] !== " ") checked++;
+  }
+  // A declared but empty section is not progress, and rendering "0/0" on a
+  // card reads as work that has not started rather than work with no criteria.
+  return total === 0 ? null : { checked, total };
+}
+
 export interface RepoManifestEntry {
   name: string;
   description: string;
@@ -63,6 +102,13 @@ export interface TrackerRecord {
   sourcePath: string;
   folder: PublishedDir;
   completed: boolean;
+  /** Acceptance-criteria progress, or null when the record declares none. */
+  acceptance: AcceptanceProgress | null;
+}
+
+export interface AcceptanceProgress {
+  checked: number;
+  total: number;
 }
 
 export interface TrackerMeta {
@@ -73,11 +119,28 @@ export interface TrackerMeta {
   labels?: string[] | string;
   milestone?: string;
   dependencies?: string[] | string;
+  /** Backlog.md writes `parent_task_id`. `parent` has never been emitted. */
+  parent_task_id?: string;
   parent?: string;
+  type?: string;
+  assignee?: string[] | string;
   references?: string[] | string;
   created_date?: string;
   updated_date?: string;
   [key: string]: unknown;
+}
+
+/**
+ * The URL segment a repository is published under.
+ *
+ * Workers Static Assets refuses any path whose segment begins with a dot: it
+ * answers 403, not 404, and it does so at the edge where no build output can
+ * show it. `rknightion/.github` is a real repository with a real tracker, so
+ * its pages are built under a rewritten segment and only its display name
+ * keeps the dot. The build asserts no dot-leading segment reaches `dist/`.
+ */
+export function urlSegment(repo: string): string {
+  return repo.startsWith(".") ? `dot-${repo.slice(1)}` : repo;
 }
 
 export function loadManifest(): Manifest {
@@ -165,6 +228,7 @@ export function readRecords(
       body: body.replace(SECTION_MARKERS, ""),
       sourcePath: `backlog/${folder}/${name}`,
       folder,
+      acceptance: acceptanceProgress(body),
       // Most trackers in this fleet never use the `completed/` folder and mark
       // a finished task `status: Done` in place, so both have to count.
       completed:
@@ -240,13 +304,17 @@ export function milestoneResolver(milestones: TrackerRecord[]) {
 /**
  * The date a page reports as its last modification.
  *
- * `updated_date` then `created_date`, with a naive timestamp read as UTC. This
+ * `updated_date`, then `created_date`, then a decision's `date`, with a naive
+ * timestamp read as UTC. This
  * is the site's only source of sitemap lastmod: these pages are generated and
  * have no git history of their own, which is also why the ingest is allowed to
  * clone shallowly.
  */
 export function sourceDate(meta: TrackerMeta): Date | null {
-  for (const key of ["updated_date", "created_date"] as const) {
+  // `date` is last because only decisions carry it, and they carry nothing
+  // else: a decision has no updated_date, so without this every decision is
+  // undated and any page that indexes them has no lastmod to report.
+  for (const key of ["updated_date", "created_date", "date"] as const) {
     const raw = asText(meta[key]).trim();
     if (!raw) continue;
     // Backlog writes `2026-08-14 16:58` (no zone). Treat it as UTC rather than

@@ -1,0 +1,40 @@
+---
+import { getCollection } from "astro:content";
+import RecordIndex from "../../../components/RecordIndex.astro";
+
+export async function getStaticPaths() {
+  const projects = await getCollection("projects");
+  const docs = await getCollection("trackerDocs");
+
+  // Only projects that actually publish a document get a page. An empty index
+  // is a page that exists to say nothing, and it would still take a sitemap
+  // entry and a link from the board.
+  return projects
+    .filter((p) => docs.some((d) => d.data.project === p.data.slug))
+    .map((project) => ({
+      params: { project: project.data.path },
+      props: {
+        project,
+        items: docs.filter((d) => d.data.project === project.data.slug),
+      },
+    }));
+}
+
+const { project, items } = Astro.props;
+const sorted = [...items].sort((a, b) => a.data.title.localeCompare(b.data.title));
+---
+
+<RecordIndex
+  project={project.data.path}
+  projectLabel={project.data.slug}
+  folder="docs"
+  heading="Documents"
+  lede="Durable reference the tracker carries alongside its tasks: operating models, settled decisions, and the notes a task is too short to hold."
+  items={sorted.map((d) => ({
+    taskId: d.data.taskId,
+    title: d.data.title,
+    lastmod: d.data.lastmod,
+  }))}
+  repoUrl={project.data.repoUrl}
+  now={new Date()}
+/>

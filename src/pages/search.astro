@@ -19,6 +19,16 @@ import Base from "../layouts/Base.astro";
     you have results.
   </p>
 
+  <fieldset class="filters sort-control" data-pagefind-ignore>
+    <legend>Order results by</legend>
+    <label>
+      <input type="radio" name="sort" value="relevance" checked /> Relevance
+    </label>
+    <label>
+      <input type="radio" name="sort" value="date" /> Most recently changed
+    </label>
+  </fieldset>
+
   <div id="search" data-pagefind-ignore></div>
 
   <noscript>
@@ -33,12 +43,37 @@ import Base from "../layouts/Base.astro";
   <script is:inline>
     window.addEventListener("DOMContentLoaded", () => {
       if (typeof PagefindUI === "undefined") return;
-      new PagefindUI({
-        element: "#search",
-        showSubResults: true,
-        showImages: false,
-        pageSize: 10,
-      });
+
+      // Sorting REPLACES relevance ranking rather than breaking ties within it,
+      // so it is a deliberate choice the reader makes, never the default.
+      // PagefindUI takes its sort at construction, so switching means building
+      // a new one over the same element and replaying the current term.
+      let ui = null;
+
+      function mount(sort) {
+        // Class name, not `input[type=text]`: Pagefind renders a search input
+        // and the type attribute is not what it keys off.
+        const term = document.querySelector(".pagefind-ui__search-input")?.value ?? "";
+        if (ui) ui.destroy();
+        document.querySelector("#search").innerHTML = "";
+        ui = new PagefindUI({
+          element: "#search",
+          showSubResults: true,
+          showImages: false,
+          pageSize: 10,
+          // Four facets and more than six values each, so none would open on
+          // its own. Project is the one worth showing without a click.
+          openFilters: ["project"],
+          ...(sort === "date" ? { sort: { date: "desc" } } : {}),
+        });
+        if (term) ui.triggerSearch(term);
+      }
+
+      mount("relevance");
+
+      for (const radio of document.querySelectorAll("input[name=sort]")) {
+        radio.addEventListener("change", (event) => mount(event.target.value));
+      }
     });
   </script>
 

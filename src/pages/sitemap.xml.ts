@@ -20,6 +20,8 @@ export const GET: APIRoute = async ({ site }) => {
   const projects = await getCollection("projects");
   const tasks = await getCollection("tasks");
   const milestones = await getCollection("milestones");
+  const docs = await getCollection("trackerDocs");
+  const decisions = await getCollection("decisions");
 
   const newest = (dates: Array<Date | null>): Date | null => {
     const valid = dates.filter((d): d is Date => d instanceof Date);
@@ -30,31 +32,64 @@ export const GET: APIRoute = async ({ site }) => {
 
   const entries: Array<{ path: string; lastmod: Date | null }> = [];
 
-  // The index moves whenever anything moves.
+  // The index and the fleet-wide views move whenever anything moves. Activity
+  // and statistics read docs and decisions too, so their dates come from
+  // everything rather than from tasks alone.
+  const everything = newest([
+    ...tasks.map((t) => t.data.lastmod),
+    ...docs.map((d) => d.data.lastmod),
+    ...decisions.map((d) => d.data.lastmod),
+  ]);
+  entries.push({ path: "/", lastmod: everything });
+  entries.push({ path: "/activity/", lastmod: everything });
+  entries.push({ path: "/stats/", lastmod: everything });
   entries.push({
-    path: "/",
-    lastmod: newest(tasks.map((t) => t.data.lastmod)),
+    path: "/open/",
+    lastmod: newest(
+      tasks.filter((t) => !t.data.completed).map((t) => t.data.lastmod),
+    ),
   });
 
   for (const project of projects) {
     const slug = project.data.slug;
+    // The URL segment, which differs from the name where the name is not
+    // URL-safe. Records are filtered by name, paths are built from the segment.
+    const base = project.data.path;
     const mine = tasks.filter((t) => t.data.project === slug);
     const done = mine.filter((t) => t.data.completed);
 
     entries.push({
-      path: `/${slug}/`,
-      lastmod: newest(mine.map((t) => t.data.lastmod)),
+      path: `/${base}/`,
+      // Not the newest task: the board links the document and decision indexes,
+      // so a tracker whose only recent change was a document has still moved.
+      lastmod: project.data.lastActivity,
     });
     if (done.length) {
       entries.push({
-        path: `/${slug}/completed/`,
+        path: `/${base}/completed/`,
         lastmod: newest(done.map((t) => t.data.lastmod)),
       });
     }
     if (milestones.some((m) => m.data.project === slug)) {
       entries.push({
-        path: `/${slug}/milestones/`,
+        path: `/${base}/milestones/`,
         lastmod: newest(mine.map((t) => t.data.lastmod)),
+      });
+    }
+    // The records themselves stay noindex and out of the sitemap; these index
+    // pages are what makes them reachable, so they must be in it.
+    const projectDocs = docs.filter((d) => d.data.project === slug);
+    if (projectDocs.length) {
+      entries.push({
+        path: `/${base}/docs/`,
+        lastmod: newest(projectDocs.map((d) => d.data.lastmod)),
+      });
+    }
+    const projectDecisions = decisions.filter((d) => d.data.project === slug);
+    if (projectDecisions.length) {
+      entries.push({
+        path: `/${base}/decisions/`,
+        lastmod: newest(projectDecisions.map((d) => d.data.lastmod)),
       });
     }
   }

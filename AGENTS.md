@@ -34,10 +34,10 @@ offline.
 
 ## Freshness is a cron, deliberately
 
-Nothing in the 24 tracked repositories knows this site exists. That is what makes auto-detect
-work, and the cost is polling: `.github/workflows/deploy.yml` rebuilds hourly. A per-repo
-`repository_dispatch` would be fresher and would need wiring in every repo, which is exactly
-the coupling this design removes. Do not add it without accepting that trade.
+Nothing in the tracked repositories knows this site exists. That is what makes auto-detect
+work, and the cost is polling: `.github/workflows/deploy.yml` rebuilds every six hours. A
+per-repo `repository_dispatch` would be fresher and would need wiring in every repo, which is
+exactly the coupling this design removes. Do not add it without accepting that trade.
 
 ## What the build proves, and why each check exists
 
@@ -56,8 +56,22 @@ corresponds to a failure that is otherwise **silent**, leaving a green build and
    board legitimately.
 4. **No third-party subresource.** Fonts and search assets are served from this origin.
 5. **Unique titles.** Task titles repeat across projects, so the title must carry the project.
-6. **noindex and the sitemap agree.** Records are noindex and absent from the sitemap.
+6. **noindex and the sitemap agree.** Records are noindex and absent from the sitemap. The
+   `docs/` and `decisions/` _index_ pages are indexable and in it; only the records below
+   them are not.
 7. **Nothing withheld reached the output.**
+8. **Every record page is linked from an index.** Records are noindex and out of the sitemap,
+   so a record nothing links to is published in name only. That is exactly what happened to
+   all 76 tracker documents until this check existed.
+9. **`llms.txt` names the published projects, no more and no fewer.** It is generated from
+   the same collections the pages are; a disagreement means the generator and the router have
+   diverged.
+10. **Pagefind built every filter and the sort.** Asserted against what Pagefind reports and
+    the filter indexes it wrote, not against the markup that was meant to produce them.
+11. **No dot-leading path segment.** See the trap below.
+12. **Every declared `og:image` exists and has text in it.** The rasteriser resolves fonts
+    against the build machine; when it finds none it renders the canvas and no glyphs, which
+    is a valid PNG at roughly a tenth the size.
 
 ## Traps
 
@@ -76,8 +90,27 @@ corresponds to a failure that is otherwise **silent**, leaving a green build and
   milestone renders as two. An ambiguous title fails the build rather than guessing.
 - **Most trackers never use `completed/`.** They mark a task `status: Done` in place, so
   "completed" means either, and a check for the folder alone finds almost nothing.
+- **Workers Static Assets answers 403 for any dot-leading path segment.** Not 404, and not
+  at build time. `rknightion/.github` is a real repository with a real tracker, so
+  `urlSegment()` publishes it under `dot-github` and only its display name keeps the dot. Its
+  board was live and unreachable for exactly this reason. Anything that builds a URL from a
+  repository name goes through that function.
+- **The zone converts every page to Markdown on request**, through Cloudflare's Markdown for
+  Agents (`content_converter`), so `Accept: text/markdown` on any URL here returns prose.
+  Nothing in this repo produces it and nothing here can test it. Two consequences: do not
+  build `.md` twins, and **do not use `<dl>`** - definition lists pass through that converter
+  as raw HTML, which is why the record metadata is a `<ul>` with `<strong>` labels.
 - **A freshly deployed URL 404s at the Cloudflare edge briefly.** `Cache-Control: no-cache`
   is not enough on a brand-new path; add a query-string cache-buster before believing a 404.
+
+## Agent-facing surfaces
+
+`llms.txt`, JSON-LD on every page, `Link` headers in `public/_headers`, and a
+`Content-Signal` line inside the `User-agent` group in `robots.txt` - inside, because a blank
+line ends a group and a signal below one applies to nothing. All four are generated or
+asserted; none is hand-maintained. Cards under `/og/` are drawn as SVG and rasterised at build
+time from the same collections the pages read, so a card cannot claim a count the site does
+not show.
 
 ## Brand
 

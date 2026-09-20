@@ -8,6 +8,7 @@ import {
   readRecords,
   readTasks,
   sourceDate,
+  urlSegment,
   asList,
   asText,
   type TrackerRecord,
@@ -33,10 +34,23 @@ const projects = defineCollection({
         const config = readConfig(repo.name);
         const tasks = readTasks(repo.name);
         const open = tasks.filter((t) => !t.completed);
+        // Across every folder, not just tasks: a project whose only recent
+        // change was to a tracker doc has still moved.
+        const everyRecord = [
+          ...tasks,
+          ...readRecords(repo.name, "docs"),
+          ...readRecords(repo.name, "decisions"),
+          ...readRecords(repo.name, "milestones"),
+        ];
+        const activity = everyRecord
+          .map((r) => sourceDate(r.meta))
+          .filter((d): d is Date => d instanceof Date)
+          .reduce<Date | null>((a, b) => (!a || b > a ? b : a), null);
         const data = await parseData({
           id: repo.name,
           data: {
             slug: repo.name,
+            path: urlSegment(repo.name),
             title: config.projectName || repo.name,
             description: repo.description,
             language: repo.language,
@@ -48,6 +62,7 @@ const projects = defineCollection({
             docCount: readRecords(repo.name, "docs").length,
             decisionCount: readRecords(repo.name, "decisions").length,
             milestoneCount: readRecords(repo.name, "milestones").length,
+            lastActivity: activity,
           },
         });
         store.set({ id: repo.name, data });
@@ -56,6 +71,8 @@ const projects = defineCollection({
   },
   schema: z.object({
     slug: z.string().min(1),
+    /** URL segment; differs from `slug` only where the name is not URL-safe. */
+    path: z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]*$/),
     title: z.string().min(1),
     description: z.string(),
     language: z.string().nullable(),
@@ -67,6 +84,7 @@ const projects = defineCollection({
     docCount: z.number().int().nonnegative(),
     decisionCount: z.number().int().nonnegative(),
     milestoneCount: z.number().int().nonnegative(),
+    lastActivity: dateOrNull,
   }),
 });
 
@@ -117,6 +135,7 @@ function recordCollection(
               id,
               data: {
                 project: repo.name,
+                projectPath: urlSegment(repo.name),
                 taskId: record.id,
                 title: record.title,
                 status: asText(record.meta.status).trim() || "Unspecified",
@@ -125,7 +144,16 @@ function recordCollection(
                 milestone: isTask ? resolver.title(resolver.key(record)) : null,
                 milestoneKey: isTask ? resolver.key(record) : null,
                 dependencies: asList(record.meta.dependencies),
-                parent: asText(record.meta.parent).trim() || null,
+                // `parent_task_id` is what Backlog.md writes. Reading `parent`
+                // alone meant every subtask relationship in the fleet was
+                // parsed as absent, with no error to show for it.
+                parent:
+                  asText(record.meta.parent_task_id).trim() ||
+                  asText(record.meta.parent).trim() ||
+                  null,
+                type: asText(record.meta.type).trim() || null,
+                assignee: asList(record.meta.assignee),
+                acceptance: record.acceptance,
                 references: asList(record.meta.references),
                 completed: record.completed,
                 sourcePath: record.sourcePath,
@@ -166,6 +194,7 @@ function recordCollection(
     },
     schema: z.object({
       project: z.string().min(1),
+      projectPath: z.string().min(1),
       taskId: z.string().min(1),
       title: z.string().min(1),
       status: z.string(),
@@ -175,6 +204,14 @@ function recordCollection(
       milestoneKey: z.string().nullable(),
       dependencies: z.array(z.string()),
       parent: z.string().nullable(),
+      type: z.string().nullable(),
+      assignee: z.array(z.string()),
+      acceptance: z
+        .object({
+          checked: z.number().int().nonnegative(),
+          total: z.number().int().positive(),
+        })
+        .nullable(),
       references: z.array(z.string()),
       completed: z.boolean(),
       sourcePath: z.string(),

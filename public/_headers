@@ -3,6 +3,9 @@
   Referrer-Policy: strict-origin-when-cross-origin
   X-Frame-Options: DENY
   Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()
+  # Machine-readable entry points, so a crawler that reads only the headers of
+  # one page still learns where the sitemap and the site summary are.
+  Link: <https://backlogs.m7kni.io/sitemap.xml>; rel="sitemap"; type="application/xml", <https://backlogs.m7kni.io/llms.txt>; rel="describedby"; type="text/plain"
 
 # Content-hashed by Vite, so the name changes whenever the bytes do.
 /_astro/*

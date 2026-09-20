@@ -28,7 +28,7 @@ export async function getStaticPaths() {
     }
 
     return {
-      params: { project: slug },
+      params: { project: project.data.path },
       props: { project, groups: [...groups.entries()].map(([key, g]) => ({ key, ...g })) },
     };
   });
@@ -40,9 +40,10 @@ const { project, groups } = Astro.props;
 <Base
   title={`${project.data.slug}: milestones`}
   description={`Milestone progress across the ${project.data.slug} backlog.`}
+  image={`/og/${project.data.path}.png`}
 >
   <p class="breadcrumb">
-    <a href="/">Projects</a> / <a href={`/${project.data.slug}/`}>{project.data.slug}</a> / Milestones
+    <a href="/">Projects</a> / <a href={`/${project.data.path}/`}>{project.data.slug}</a> / Milestones
   </p>
   <p class="eyebrow">Milestones</p>
   <h1>{project.data.slug}</h1>
@@ -68,7 +69,7 @@ const { project, groups } = Astro.props;
           <div class="grid">
             {group.items.map((task) => (
               <TaskCard
-                project={task.data.project}
+                project={task.data.projectPath}
                 taskId={task.data.taskId}
                 title={task.data.title}
                 status={task.data.status}

@@ -1,0 +1,37 @@
+---
+import { getCollection } from "astro:content";
+import RecordIndex from "../../../components/RecordIndex.astro";
+
+export async function getStaticPaths() {
+  const projects = await getCollection("projects");
+  const decisions = await getCollection("decisions");
+
+  return projects
+    .filter((p) => decisions.some((d) => d.data.project === p.data.slug))
+    .map((project) => ({
+      params: { project: project.data.path },
+      props: {
+        project,
+        items: decisions.filter((d) => d.data.project === project.data.slug),
+      },
+    }));
+}
+
+const { project, items } = Astro.props;
+const sorted = [...items].sort((a, b) => a.data.taskId.localeCompare(b.data.taskId));
+---
+
+<RecordIndex
+  project={project.data.path}
+  projectLabel={project.data.slug}
+  folder="decisions"
+  heading="Decisions"
+  lede="Decisions recorded against this tracker, kept as written."
+  items={sorted.map((d) => ({
+    taskId: d.data.taskId,
+    title: d.data.title,
+    lastmod: d.data.lastmod,
+  }))}
+  repoUrl={project.data.repoUrl}
+  now={new Date()}
+/>

@@ -477,29 +477,25 @@ progress {
   }
 }
 
-.meta-table {
-  margin-bottom: var(--space-6);
+/* A list, not a definition list: these pages are converted to Markdown at the
+   edge on request, and dl/dt/dd survives that conversion as raw HTML. */
+.meta-list {
+  margin: 0 0 var(--space-6);
+  padding: var(--space-2) var(--space-4);
+  list-style: none;
   border: 1px solid var(--color-border-default);
   border-radius: var(--radius-overlay);
-  overflow: hidden;
   font-size: var(--font-size-sm);
 }
-.meta-table div {
-  display: grid;
-  grid-template-columns: minmax(8rem, 1fr) 3fr;
-  gap: var(--space-4);
-  padding: var(--space-2) var(--space-4);
-  border-bottom: 1px solid var(--color-border-default);
+.meta-list li {
+  padding: var(--space-1) 0;
 }
-.meta-table div:last-child {
-  border-bottom: 0;
+.meta-list li + li {
+  border-top: 1px solid var(--color-border-default);
 }
-.meta-table dt {
-  margin: 0;
+.meta-list strong {
   color: var(--color-fg-muted);
-}
-.meta-table dd {
-  margin: 0;
+  font-weight: var(--font-weight-normal);
 }
 
 @media (max-width: 640px) {
@@ -509,10 +505,6 @@ progress {
   }
   .filter-actions {
     margin-left: 0;
-  }
-  .meta-table div {
-    grid-template-columns: 1fr;
-    gap: var(--space-1);
   }
 }
 
@@ -526,4 +518,106 @@ progress {
   .board {
     display: block;
   }
+}
+
+/* Type and acceptance-criteria badges on a card. Deliberately quieter than the
+   priority colours: those are what a board is scanned for, these are context. */
+.kind {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--color-border-default);
+  color: var(--color-fg-muted);
+}
+.ac {
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg-muted);
+}
+.ac-done {
+  color: var(--color-fg-soft);
+  font-weight: var(--font-weight-semibold);
+}
+
+.count {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-track);
+  color: var(--color-fg-soft);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.sort-control {
+  gap: var(--space-4);
+  align-items: center;
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.sort-control legend {
+  padding: 0 var(--space-2);
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-xs);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.sort-control label {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+/* Weekly completion. Bars only, no axis: the exact figures are in the title
+   attribute and in the summary line above, and an axis at this size lies. */
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 7rem;
+  margin: var(--space-4) 0;
+  padding: var(--space-2);
+  border-bottom: 1px solid var(--color-border-default);
+}
+.chart .bar {
+  flex: 1;
+  min-height: 1px;
+  height: var(--h);
+  border-radius: var(--radius-control) var(--radius-control) 0 0;
+  background: var(--color-bg-accent-soft);
+}
+.chart .bar:hover {
+  background: var(--color-fg-muted);
+}
+
+/* The accessible copy of the weekly chart. Collapsed by default because the
+   bars already answer the shape question; the table answers the exact one. */
+.figures {
+  margin-bottom: var(--space-8);
+  font-size: var(--font-size-sm);
+}
+.figures summary {
+  cursor: pointer;
+  color: var(--color-fg-muted);
+}
+.figures table {
+  margin-top: var(--space-3);
+  border-collapse: collapse;
+}
+.figures caption {
+  padding-bottom: var(--space-2);
+  color: var(--color-fg-muted);
+  text-align: left;
+}
+.figures th,
+.figures td {
+  padding: var(--space-1) var(--space-4) var(--space-1) 0;
+  border-bottom: 1px solid var(--color-border-default);
+  text-align: left;
+  font-weight: var(--font-weight-normal);
+}
+.figures td {
+  font-variant-numeric: tabular-nums;
 }

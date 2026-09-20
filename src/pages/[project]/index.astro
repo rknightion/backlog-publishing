@@ -8,7 +8,7 @@ export async function getStaticPaths() {
   const projects = await getCollection("projects");
   const tasks = await getCollection("tasks");
   return projects.map((project) => ({
-    params: { project: project.data.slug },
+    params: { project: project.data.path },
     props: {
       project,
       tasks: tasks.filter((t) => t.data.project === project.data.slug),
@@ -29,11 +29,37 @@ const byColumn = columns.map((status) => ({
 
 // A status that survived deriveColumns but holds nothing is still rendered:
 // an empty column tells you the stage exists, which a missing one does not.
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  name: `${project.data.slug} backlog`,
+  description: project.data.description,
+  url: new URL(Astro.url.pathname, Astro.site).href,
+  ...(project.data.lastActivity
+    ? { dateModified: project.data.lastActivity.toISOString() }
+    : {}),
+  mainEntity: {
+    "@type": "ItemList",
+    numberOfItems: open.length,
+    itemListElement: open.slice(0, 100).map((task, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: `${task.data.taskId}: ${task.data.title}`,
+      url: new URL(
+        `/${project.data.path}/tasks/${encodeURIComponent(task.data.taskId)}/`,
+        Astro.site,
+      ).href,
+    })),
+  },
+};
 ---
 
 <Base
   title={`${project.data.slug} backlog`}
   description={`Task board for ${project.data.slug}: ${project.data.openCount} open tasks across ${columns.length} columns.`}
+  image={`/og/${project.data.path}.png`}
+  jsonLd={jsonLd}
 >
   <p class="breadcrumb"><a href="/">Projects</a> / {project.data.slug}</p>
   <p class="eyebrow">Task board</p>
@@ -42,9 +68,15 @@ const byColumn = columns.map((status) => ({
 
   <p class="results">
     {project.data.openCount} open, {project.data.completedCount} completed &middot;
-    <a href={`/${project.data.slug}/completed/`}>Completed work</a>
+    <a href={`/${project.data.path}/completed/`}>Completed work</a>
     {project.data.milestoneCount > 0 && (
-      <> &middot; <a href={`/${project.data.slug}/milestones/`}>Milestones</a></>
+      <> &middot; <a href={`/${project.data.path}/milestones/`}>Milestones</a></>
+    )}
+    {project.data.docCount > 0 && (
+      <> &middot; <a href={`/${project.data.path}/docs/`}>Documents</a></>
+    )}
+    {project.data.decisionCount > 0 && (
+      <> &middot; <a href={`/${project.data.path}/decisions/`}>Decisions</a></>
     )}
     &middot; <a href={project.data.repoUrl}>Repository</a>
   </p>
@@ -62,13 +94,15 @@ const byColumn = columns.map((status) => ({
           <div class="column-items">
             {items.map((task) => (
               <TaskCard
-                project={task.data.project}
+                project={task.data.projectPath}
                 taskId={task.data.taskId}
                 title={task.data.title}
                 status={task.data.status}
                 priority={task.data.priority}
                 labels={task.data.labels}
                 milestone={task.data.milestone}
+                type={task.data.type}
+                acceptance={task.data.acceptance}
               />
             ))}
           </div>

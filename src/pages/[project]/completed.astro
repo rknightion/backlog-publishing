@@ -7,7 +7,7 @@ export async function getStaticPaths() {
   const projects = await getCollection("projects");
   const tasks = await getCollection("tasks");
   return projects.map((project) => ({
-    params: { project: project.data.slug },
+    params: { project: project.data.path },
     props: {
       project,
       done: tasks
@@ -28,9 +28,10 @@ const { project, done } = Astro.props;
 <Base
   title={`${project.data.slug}: completed work`}
   description={`${done.length} completed tasks in the ${project.data.slug} backlog.`}
+  image={`/og/${project.data.path}.png`}
 >
   <p class="breadcrumb">
-    <a href="/">Projects</a> / <a href={`/${project.data.slug}/`}>{project.data.slug}</a> / Completed
+    <a href="/">Projects</a> / <a href={`/${project.data.path}/`}>{project.data.slug}</a> / Completed
   </p>
   <p class="eyebrow">Completed work</p>
   <h1>{project.data.slug}</h1>
@@ -42,13 +43,15 @@ const { project, done } = Astro.props;
         {
           done.map((task) => (
             <TaskCard
-              project={task.data.project}
+              project={task.data.projectPath}
               taskId={task.data.taskId}
               title={task.data.title}
               status={task.data.status}
               priority={task.data.priority}
               labels={task.data.labels}
               milestone={task.data.milestone}
+              type={task.data.type}
+              acceptance={task.data.acceptance}
             />
           ))
         }

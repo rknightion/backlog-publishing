@@ -11,6 +11,8 @@ import {
   sourceDate,
   asList,
   assertUniqueIds,
+  acceptanceProgress,
+  urlSegment,
 } from "../src/lib/backlog.ts";
 
 const record = (over: Record<string, unknown> = {}) =>
@@ -119,4 +121,76 @@ test("asList normalises a scalar, a list and an absent value", () => {
 test("assertUniqueIds catches two records claiming one URL", () => {
   const records = [record({ id: "T-1" }), record({ id: "t-1" })];
   assert.throws(() => assertUniqueIds("demo", records), /duplicate/i);
+});
+
+test("sourceDate falls back to a decision's `date`, which is its only date", () => {
+  assert.equal(
+    sourceDate({ date: "2026-09-09 09:39" })?.toISOString(),
+    "2026-09-09T09:39:00.000Z",
+  );
+});
+
+test("sourceDate still prefers updated_date when a record carries both", () => {
+  assert.equal(
+    sourceDate({
+      date: "2026-01-01 00:00",
+      updated_date: "2026-05-05 12:00",
+    })?.toISOString(),
+    "2026-05-05T12:00:00.000Z",
+  );
+});
+
+test("acceptanceProgress counts only the acceptance block, never the DoD", () => {
+  const body = [
+    "## Acceptance Criteria",
+    "<!-- AC:BEGIN -->",
+    "- [x] #1 One",
+    "- [ ] #2 Two",
+    "- [x] #3 Three",
+    "<!-- AC:END -->",
+    "## Definition of Done",
+    "<!-- DOD:BEGIN -->",
+    "- [ ] #1 Gate",
+    "- [ ] #2 Generate",
+    "<!-- DOD:END -->",
+  ].join("\n");
+  assert.deepEqual(acceptanceProgress(body), { checked: 2, total: 3 });
+});
+
+test("acceptanceProgress falls back to the heading when the markers are gone", () => {
+  // A broken marker silently drops the section on the next Backlog write, so a
+  // tracker can legitimately reach us with the heading and no comments.
+  const body =
+    "## Acceptance Criteria\n- [x] #1 One\n- [ ] #2 Two\n\n## Notes\n- [x] not counted\n";
+  assert.deepEqual(acceptanceProgress(body), { checked: 1, total: 2 });
+});
+
+test("acceptanceProgress reports nothing for a record with no criteria", () => {
+  assert.equal(acceptanceProgress("## Description\n\nJust prose.\n"), null);
+});
+
+test("acceptanceProgress treats a declared but empty block as no criteria", () => {
+  // "0/0" on a card reads as work not started rather than work with no criteria.
+  assert.equal(
+    acceptanceProgress("<!-- AC:BEGIN -->\n\n<!-- AC:END -->"),
+    null,
+  );
+});
+
+test("acceptanceProgress counts an uppercase X as met", () => {
+  assert.deepEqual(
+    acceptanceProgress("<!-- AC:BEGIN -->\n- [X] #1 One\n<!-- AC:END -->"),
+    { checked: 1, total: 1 },
+  );
+});
+
+test("urlSegment rewrites a dot-leading repository name", () => {
+  // Workers Static Assets answers 403 for any dot-leading path segment, at the
+  // edge, where no build output shows it.
+  assert.equal(urlSegment(".github"), "dot-github");
+});
+
+test("urlSegment leaves an ordinary name alone", () => {
+  assert.equal(urlSegment("sf2loki"), "sf2loki");
+  assert.equal(urlSegment("meraki-dashboard-ha"), "meraki-dashboard-ha");
 });

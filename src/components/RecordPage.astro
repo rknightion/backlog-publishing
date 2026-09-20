@@ -1,6 +1,8 @@
 ---
 import Base from "../layouts/Base.astro";
+import { getCollection } from "astro:content";
 import type { CollectionEntry } from "astro:content";
+import { isoDay, recordHref } from "../lib/display";
 
 type AnyRecord =
   | CollectionEntry<"tasks">
@@ -18,49 +20,188 @@ interface Props {
 const { entry, kind, Content } = Astro.props;
 const d = entry.data;
 
+// Every record this project publishes, so a reference can be resolved to the
+// page that holds it. An ID the tracker names but never published stays text:
+// a link to a page that was deliberately withheld is worse than no link.
+const [allTasks, allDocs, allDecisions] = await Promise.all([
+  getCollection("tasks"),
+  getCollection("trackerDocs"),
+  getCollection("decisions"),
+]);
+const siblings = allTasks.filter((t) => t.data.project === d.project);
+// Hrefs use the URL segment; everything a reader sees uses the repository name.
+const base = d.projectPath;
+
+const targets = new Map<string, { href: string; title: string }>();
+for (const t of siblings) {
+  targets.set(t.data.taskId.toLowerCase(), {
+    href: recordHref(base, "tasks", t.data.taskId),
+    title: t.data.title,
+  });
+}
+for (const [collection, folder] of [
+  [allDocs, "docs"],
+  [allDecisions, "decisions"],
+] as const) {
+  for (const r of collection) {
+    if (r.data.project !== d.project) continue;
+    targets.set(r.data.taskId.toLowerCase(), {
+      href: recordHref(base, folder, r.data.taskId),
+      title: r.data.title,
+    });
+  }
+}
+
+const link = (id: string) => ({ id, ...targets.get(id.toLowerCase()) });
+
+// Both directions. A task states what it depends on and what its parent is;
+// nothing in the source states what depends on it, and that is usually the
+// more useful question when you are reading a blocker.
+const blocks = siblings
+  .filter((t) =>
+    t.data.dependencies.some((x) => x.toLowerCase() === d.taskId.toLowerCase()),
+  )
+  .sort((a, b) => a.data.taskId.localeCompare(b.data.taskId));
+const children = siblings
+  .filter((t) => t.data.parent?.toLowerCase() === d.taskId.toLowerCase())
+  .sort((a, b) => a.data.taskId.localeCompare(b.data.taskId));
+
 // Only fields that were actually set. An empty row is noise, and a table of
 // "Unspecified" tells a reader nothing.
 const rows: Array<[string, string]> = [];
 if (d.status && d.status !== "Unspecified") rows.push(["Status", d.status]);
+if (d.type) rows.push(["Type", d.type]);
 if (d.priority && d.priority !== "Unspecified") rows.push(["Priority", d.priority]);
+if (d.acceptance) {
+  rows.push([
+    "Acceptance criteria",
+    `${d.acceptance.checked} of ${d.acceptance.total} met`,
+  ]);
+}
+if (d.assignee.length) rows.push(["Assignee", d.assignee.join(", ")]);
 if (d.labels.length) rows.push(["Labels", d.labels.join(", ")]);
 if (d.milestone && d.milestone !== "Unassigned") rows.push(["Milestone", d.milestone]);
-if (d.parent) rows.push(["Parent", d.parent]);
-if (d.dependencies.length) rows.push(["Dependencies", d.dependencies.join(", ")]);
-if (d.lastmod) {
-  rows.push(["Updated", d.lastmod.toISOString().slice(0, 10)]);
-}
+if (d.lastmod) rows.push(["Updated", isoDay(d.lastmod)]);
 
 const sourceUrl = `${d.repoUrl}/blob/HEAD/${d.sourcePath}`;
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "CreativeWork",
+  name: `${d.taskId}: ${d.title}`,
+  identifier: d.taskId,
+  headline: d.title,
+  url: new URL(Astro.url.pathname, Astro.site).href,
+  isPartOf: {
+    "@type": "Collection",
+    name: `${d.project} backlog`,
+    url: new URL(`/${base}/`, Astro.site).href,
+  },
+  ...(d.lastmod ? { dateModified: d.lastmod.toISOString() } : {}),
+  ...(d.type ? { genre: d.type } : {}),
+  ...(d.labels.length ? { keywords: d.labels.join(", ") } : {}),
+  creativeWorkStatus: d.completed ? "Completed" : d.status,
+};
 ---
 
 <Base
   title={`${d.taskId}: ${d.title} - ${d.project}`}
   description={`${kind} ${d.taskId} in the ${d.project} backlog: ${d.title}`}
+  image={`/og/${base}.png`}
+  jsonLd={jsonLd}
   noindex
 >
   <p class="breadcrumb">
-    <a href="/">Projects</a> / <a href={`/${d.project}/`}>{d.project}</a> / {d.taskId}
+    <a href="/">Projects</a> / <a href={`/${base}/`}>{d.project}</a> / {d.taskId}
   </p>
   <p class="eyebrow">{kind} &middot; {d.taskId}</p>
   <h1>{d.title}</h1>
 
+  {/* A list, not a definition list. The edge converts these pages to Markdown
+      on request, and it passes dl/dt/dd straight through as raw HTML, so a
+      definition list here puts markup in front of every agent that reads it. */}
   {
     rows.length > 0 && (
-      <dl class="meta-table">
+      <ul class="meta-list">
         {rows.map(([label, value]) => (
-          <div>
-            <dt>{label}</dt>
-            <dd>{value}</dd>
-          </div>
+          <li>
+            <strong>{label}:</strong> {value}
+          </li>
         ))}
-      </dl>
+      </ul>
+    )
+  }
+
+  {
+    (d.parent || d.dependencies.length > 0 || blocks.length > 0 || children.length > 0) && (
+      <ul class="meta-list">
+        {d.parent &&
+          (() => {
+            const p = link(d.parent);
+            return (
+              <li>
+                <strong>Parent:</strong>{" "}
+                {p.href ? <a href={p.href}>{p.id}</a> : p.id}
+                {p.title && ` - ${p.title}`}
+              </li>
+            );
+          })()}
+        {d.dependencies.length > 0 && (
+          <li>
+            <strong>Depends on:</strong>{" "}
+            {d.dependencies.map((dep, i) => {
+              const t = link(dep);
+              return (
+                <>
+                  {i > 0 && ", "}
+                  {t.href ? <a href={t.href}>{t.id}</a> : t.id}
+                </>
+              );
+            })}
+          </li>
+        )}
+        {blocks.length > 0 && (
+          <li>
+            <strong>Blocks:</strong>{" "}
+            {blocks.map((t, i) => (
+              <>
+                {i > 0 && ", "}
+                <a href={recordHref(base, "tasks", t.data.taskId)}>{t.data.taskId}</a>
+              </>
+            ))}
+          </li>
+        )}
+        {children.length > 0 && (
+          <li>
+            <strong>Subtasks:</strong>{" "}
+            {children.map((t, i) => (
+              <>
+                {i > 0 && ", "}
+                <a href={recordHref(base, "tasks", t.data.taskId)}>{t.data.taskId}</a>
+              </>
+            ))}
+          </li>
+        )}
+      </ul>
     )
   }
 
   {/* data-pagefind-body scopes the search index to the record itself. Without
-      it Pagefind indexes the whole page, so every result matches the nav. */}
-  <article class="prose" data-pagefind-body data-pagefind-filter={`project:${d.project}`}>
+      it Pagefind indexes the whole page, so every result matches the nav.
+      The filter and sort captures read attributes rather than inline values,
+      because an inline value may only be the last item in the list. */}
+  <article
+    class="prose"
+    data-pagefind-body
+    data-project={d.project}
+    data-status={d.completed ? "Done" : d.status}
+    data-kind={kind}
+    data-type={d.type ?? "unspecified"}
+    data-priority={d.priority}
+    data-date={isoDay(d.lastmod)}
+    data-pagefind-filter="project[data-project], status[data-status], kind[data-kind], type[data-type], priority[data-priority]"
+    data-pagefind-sort="date[data-date]"
+  >
     <Content />
   </article>
 

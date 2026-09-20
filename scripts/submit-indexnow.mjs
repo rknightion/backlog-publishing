@@ -98,16 +98,28 @@ async function main() {
     return;
   }
 
-  const response = await fetch(ENDPOINT, {
-    method: "POST",
-    headers: { "Content-Type": "application/json; charset=utf-8" },
-    body: JSON.stringify({
-      host,
-      key,
-      keyLocation,
-      urlList: changed.map((e) => e.loc),
-    }),
-  });
+  // A bounded timeout and a catch, because the deploy has already succeeded by
+  // the time this runs: an unhandled rejection here would reject main(), fail
+  // the step, and mark a good release red over an endpoint being unreachable.
+  let response;
+  try {
+    response = await fetch(ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json; charset=utf-8" },
+      body: JSON.stringify({
+        host,
+        key,
+        keyLocation,
+        urlList: changed.map((e) => e.loc),
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+  } catch (error) {
+    console.log(
+      `::warning::IndexNow request failed: ${error instanceof Error ? error.message : error}`,
+    );
+    return;
+  }
 
   // 202 means "received, key validation pending" and is the NORMAL response
   // for a host the service has not validated recently. It is success.

@@ -1,0 +1,83 @@
+---
+import Base from "../layouts/Base.astro";
+import { isoDay, relativeTime, recordHref } from "../lib/display";
+
+interface Item {
+  taskId: string;
+  title: string;
+  lastmod: Date | null;
+}
+
+interface Props {
+  /** URL segment. */
+  project: string;
+  /** Repository name, for display. */
+  projectLabel: string;
+  /** "docs" or "decisions" - both the URL segment and the collection folder. */
+  folder: "docs" | "decisions";
+  heading: string;
+  lede: string;
+  items: Item[];
+  repoUrl: string;
+  now: Date;
+}
+
+const { project, projectLabel, folder, heading, lede, items, repoUrl, now } =
+  Astro.props;
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  name: `${projectLabel}: ${heading.toLowerCase()}`,
+  url: new URL(Astro.url.pathname, Astro.site).href,
+  hasPart: items.map((item) => ({
+    "@type": "CreativeWork",
+    name: item.title,
+    identifier: item.taskId,
+    url: new URL(recordHref(project, folder, item.taskId), Astro.site).href,
+  })),
+};
+---
+
+<Base
+  title={`${projectLabel}: ${heading.toLowerCase()}`}
+  description={`${items.length} ${heading.toLowerCase()} published from the ${projectLabel} tracker.`}
+  image={`/og/${project}.png`}
+  jsonLd={jsonLd}
+>
+  <p class="breadcrumb">
+    <a href="/">Projects</a> / <a href={`/${project}/`}>{projectLabel}</a> / {heading}
+  </p>
+  <p class="eyebrow">{heading}</p>
+  <h1>{projectLabel}</h1>
+  <p class="lede">{lede}</p>
+
+  <p class="results">
+    {items.length}
+    {items.length === 1 ? "record" : "records"} &middot;
+    <a href={`/${project}/`}>Task board</a> &middot;
+    <a href={repoUrl} rel="noopener">Repository</a>
+  </p>
+
+  <div class="board" data-view="list">
+    <section class="column">
+      <div class="column-items">
+        {
+          items.map((item) => (
+            <a class="task" href={recordHref(project, folder, item.taskId)}>
+              <span class="id">{item.taskId}</span>
+              <span class="title">{item.title}</span>
+              <span class="task-meta">
+                {item.lastmod && (
+                  <time datetime={item.lastmod.toISOString()}>
+                    {isoDay(item.lastmod)} ({relativeTime(item.lastmod, now)})
+                  </time>
+                )}
+              </span>
+            </a>
+          ))
+        }
+      </div>
+    </section>
+  </div>
+</Base>

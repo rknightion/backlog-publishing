@@ -1,18 +1,47 @@
 ---
 import { getCollection } from "astro:content";
 import Base from "../layouts/Base.astro";
+import { isoDay, relativeTime } from "../lib/display";
 
-const projects = (await getCollection("projects")).sort((a, b) =>
-  a.data.slug.localeCompare(b.data.slug),
-);
+const now = new Date();
+
+// Most recently moved first. Alphabetical order put a tracker that has not been
+// touched in a year above one that moved this morning, which is the opposite of
+// what an index of live work is for. Ties and undated projects fall back to the
+// name so the order is still stable between builds.
+const projects = (await getCollection("projects")).sort((a, b) => {
+  const at = a.data.lastActivity?.getTime() ?? 0;
+  const bt = b.data.lastActivity?.getTime() ?? 0;
+  return bt - at || a.data.slug.localeCompare(b.data.slug);
+});
 
 const totalOpen = projects.reduce((sum, p) => sum + p.data.openCount, 0);
 const totalDone = projects.reduce((sum, p) => sum + p.data.completedCount, 0);
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  name: "Backlogs - m7kni.io",
+  description: `Public project trackers for ${projects.length} open-source repositories.`,
+  url: new URL("/", Astro.site).href,
+  mainEntity: {
+    "@type": "ItemList",
+    numberOfItems: projects.length,
+    itemListElement: projects.map((project, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: project.data.slug,
+      description: project.data.description,
+      url: new URL(`/${project.data.path}/`, Astro.site).href,
+    })),
+  },
+};
 ---
 
 <Base
   title="Backlogs - m7kni.io"
   description={`Public project trackers for ${projects.length} open-source repositories: ${totalOpen} open tasks and ${totalDone} completed.`}
+  jsonLd={jsonLd}
 >
   <p class="eyebrow">Project workspace</p>
   <h1>What I am working on.</h1>
@@ -23,16 +52,28 @@ const totalDone = projects.reduce((sum, p) => sum + p.data.completedCount, 0);
     the source of truth.
   </p>
 
+  <p class="results">
+    <a href="/open/">All open work</a> &middot;
+    <a href="/activity/">Recent activity</a> &middot;
+    <a href="/stats/">Statistics</a> &middot;
+    <a href="/search/">Search</a>
+  </p>
+
   <div class="grid">
     {
       projects.map((project) => (
-        <a class="card" href={`/${project.data.slug}/`}>
+        <a class="card" href={`/${project.data.path}/`}>
           <h2>{project.data.slug}</h2>
           <p>{project.data.description || "No description."}</p>
           <span class="card-foot">
             <span>{project.data.openCount} open</span>
             <span>{project.data.completedCount} done</span>
             {project.data.language && <span>{project.data.language}</span>}
+            {project.data.lastActivity && (
+              <time datetime={project.data.lastActivity.toISOString()} title={isoDay(project.data.lastActivity)}>
+                {relativeTime(project.data.lastActivity, now)}
+              </time>
+            )}
           </span>
         </a>
       ))

@@ -1,0 +1,63 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../layouts/Base.astro";
+import TaskCard from "../components/TaskCard.astro";
+import BoardFilters from "../components/BoardFilters.astro";
+
+const tasks = await getCollection("tasks");
+
+// Everything still in flight, anywhere. Newest movement first, because the
+// question this page answers is "what is live", not "what is oldest".
+const open = tasks
+  .filter((t) => !t.data.completed)
+  .sort(
+    (a, b) =>
+      (b.data.lastmod?.getTime() ?? 0) - (a.data.lastmod?.getTime() ?? 0) ||
+      a.data.project.localeCompare(b.data.project) ||
+      a.data.taskId.localeCompare(b.data.taskId),
+  );
+
+const projects = new Set(open.map((t) => t.data.project));
+---
+
+<Base
+  title="All open work"
+  description={`Every open task across ${projects.size} public trackers: ${open.length} in total.`}
+>
+  <p class="breadcrumb"><a href="/">Projects</a> / Open work</p>
+  <p class="eyebrow">Open work</p>
+  <h1>Everything in flight.</h1>
+  <p class="lede">
+    {open.length} open {open.length === 1 ? "task" : "tasks"} across {projects.size}
+    {projects.size === 1 ? "tracker" : "trackers"}, most recently touched first. Filter it
+    down, or open a board for the columns.
+  </p>
+
+  <BoardFilters showProject showStatus />
+
+  <div class="board" data-view="list" data-board>
+    <section class="column">
+      <div class="column-items">
+        {
+          open.map((task) => (
+            <TaskCard
+              project={task.data.projectPath}
+              taskId={task.data.taskId}
+              title={task.data.title}
+              status={task.data.status}
+              priority={task.data.priority}
+              labels={task.data.labels}
+              milestone={task.data.milestone}
+              type={task.data.type}
+              acceptance={task.data.acceptance}
+              projectLabel={task.data.project}
+              showProject
+            />
+          ))
+        }
+      </div>
+    </section>
+  </div>
+
+  {open.length === 0 && <p class="lede">Nothing open anywhere. Unlikely, but good.</p>}
+</Base>

@@ -6,7 +6,13 @@
 // worse than no guard, so each one asserts a count, not just an absence.
 
 import { execFileSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, renameSync } from "node:fs";
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  statSync,
+} from "node:fs";
 import path from "node:path";
 
 const DIST = path.resolve("./dist");
@@ -19,6 +25,20 @@ function run(command, args, env = {}) {
     // identical inputs produce two different sites.
     env: { ...process.env, TZ: "UTC", ...env },
   });
+}
+
+/** Same, but hands back what the command printed so it can be asserted on. */
+function capture(command, args, env = {}) {
+  const output = execFileSync(command, args, {
+    encoding: "utf8",
+    stdio: ["inherit", "pipe", "inherit"],
+    // Dates are derived from tracker front matter and formatted at build time.
+    // Without a fixed zone the output depends on the runner's locale, so two
+    // identical inputs produce two different sites.
+    env: { ...process.env, TZ: "UTC", ...env },
+  });
+  process.stdout.write(output);
+  return output;
 }
 
 /** Every .html file under dist, as absolute paths. */
@@ -57,7 +77,7 @@ if (!exists(flat404)) {
 }
 
 console.log("→ pagefind");
-run("npx", ["pagefind", "--site", "dist"]);
+const pagefindLog = capture("npx", ["pagefind", "--site", "dist"]);
 
 const pages = htmlFiles();
 console.log(`\n${pages.length} pages built`);
@@ -123,7 +143,13 @@ if (refs === 0) {
 //    tasks are present": a project whose tasks are all done has an empty board
 //    legitimately, so a presence check is wrong in both directions.
 const manifest = JSON.parse(readFileSync(".backlog-cache/index.json", "utf8"));
-const projectSlugs = new Set(manifest.repos.map((r) => r.name));
+// Same rule as `urlSegment` in src/lib/backlog.ts, which is its source of
+// truth. Duplicated rather than imported because this script is plain Node and
+// that module is TypeScript; if the two ever disagree, these assertions fail,
+// which is the behaviour we want from a duplicated rule.
+const segment = (name) =>
+  name.startsWith(".") ? `dot-${name.slice(1)}` : name;
+const projectSlugs = new Set(manifest.repos.map((r) => segment(r.name)));
 const boardPages = [...contents.entries()].filter(([p]) => {
   const rel = path.relative(DIST, p);
   return rel.endsWith("/index.html") && projectSlugs.has(path.dirname(rel));
@@ -189,9 +215,9 @@ const sitemap = readFileSync(path.join(DIST, "sitemap.xml"), "utf8");
 const indexable = [...contents.entries()].filter(
   ([, html]) => !html.includes('name="robots" content="noindex'),
 );
-const leaked = indexable
-  .filter(([p]) => /\/(tasks|docs|decisions)\//.test(p))
-  .map(([p]) => p);
+const RECORD_FILE = /\/(tasks|docs|decisions)\/[^/]+\/index\.html$/;
+const RECORD_URL = /\/(tasks|docs|decisions)\/[^/]+\/$/;
+const leaked = indexable.filter(([p]) => RECORD_FILE.test(p)).map(([p]) => p);
 if (leaked.length) {
   fail(
     `${leaked.length} record pages are missing noindex, e.g. ${path.relative(DIST, leaked[0])}`,
@@ -200,9 +226,7 @@ if (leaked.length) {
 const sitemapUrls = [...sitemap.matchAll(/<loc>([^<]+)<\/loc>/g)].map(
   (m) => m[1],
 );
-const noindexInSitemap = sitemapUrls.filter((u) =>
-  /\/(tasks|docs|decisions)\//.test(u),
-);
+const noindexInSitemap = sitemapUrls.filter((u) => RECORD_URL.test(u));
 if (noindexInSitemap.length) {
   fail(`${noindexInSitemap.length} noindex URLs are listed in the sitemap`);
 } else {
@@ -220,6 +244,132 @@ if (withheld.length) {
   fail(`${withheld.length} pages reference withheld tracker content`);
 } else {
   console.log("  no references to withheld tracker content");
+}
+
+// 8. Every record page must be reachable from an indexable page. Records are
+//    noindex and absent from the sitemap by design, so a record whose only
+//    route is a URL nobody links is published in name only - which is exactly
+//    what happened to every tracker document until this check existed.
+const linked = new Set();
+for (const [file, html] of contents) {
+  if (RECORD_FILE.test(file)) continue; // a record linking a record is not a route in
+  for (const match of html.matchAll(/href="(\/[^"#?]*)"/g)) {
+    linked.add(decodeURIComponent(match[1]));
+  }
+}
+const orphans = [...contents.keys()]
+  .filter((file) => RECORD_FILE.test(file))
+  .map((file) => `/${path.relative(DIST, file).replace(/index\.html$/, "")}`)
+  .filter((url) => !linked.has(url));
+if (orphans.length) {
+  fail(
+    `${orphans.length} record pages are reachable only by search or a cross-reference, ` +
+      `e.g. ${orphans.slice(0, 3).join(", ")}`,
+  );
+} else {
+  console.log("  every record page is linked from an index");
+}
+
+// 9. llms.txt is generated from the same manifest the pages are, so a project
+//    missing from it means the generator and the router disagree about what
+//    this site publishes.
+const llms = readFileSync(path.join(DIST, "llms.txt"), "utf8");
+const projectSection = llms.split("\n## Projects\n")[1] ?? "";
+if (!projectSection) fail("llms.txt has no Projects section");
+const named = new Set(
+  [
+    ...projectSection.matchAll(
+      /^- \[([^\]]+)\]\(https?:\/\/[^/]+\/([^/)]+)\/\)/gm,
+    ),
+  ].map((m) => m[2]),
+);
+const missing = [...projectSlugs].filter((slug) => !named.has(slug));
+const extra = [...named].filter((slug) => !projectSlugs.has(slug));
+if (missing.length || extra.length) {
+  fail(
+    `llms.txt disagrees with the ingest: missing ${missing.join(", ") || "none"}; ` +
+      `unknown ${extra.join(", ") || "none"}`,
+  );
+} else {
+  console.log(`  llms.txt names all ${named.size} published projects`);
+}
+
+// 10. Search filters and the recency sort. The attributes are easy to drop in
+//     a refactor and the only symptom is a facet quietly missing from the
+//     sidebar, so assert on what Pagefind actually built rather than on the
+//     markup that was supposed to produce it.
+const EXPECTED_FILTERS = ["project", "status", "kind", "type", "priority"];
+const filterFiles = existsSync(path.join(DIST, "pagefind", "filter"))
+  ? readdirSync(path.join(DIST, "pagefind", "filter")).filter((f) =>
+      f.endsWith(".pf_filter"),
+    ).length
+  : 0;
+const claimedFilters = Number(
+  /Indexed (\d+) filters?/.exec(pagefindLog)?.[1] ?? 0,
+);
+const claimedSorts = Number(/Indexed (\d+) sorts?/.exec(pagefindLog)?.[1] ?? 0);
+if (filterFiles !== EXPECTED_FILTERS.length) {
+  fail(
+    `pagefind built ${filterFiles} filter indexes, expected ${EXPECTED_FILTERS.length} ` +
+      `(${EXPECTED_FILTERS.join(", ")})`,
+  );
+} else if (claimedFilters !== EXPECTED_FILTERS.length) {
+  fail(
+    `pagefind reported ${claimedFilters} filters, expected ${EXPECTED_FILTERS.length}`,
+  );
+} else if (claimedSorts < 1) {
+  fail("pagefind indexed no sort; results cannot be ordered by recency");
+} else {
+  console.log(
+    `  pagefind indexed ${claimedFilters} search filters and ${claimedSorts} sort`,
+  );
+}
+
+// 11. No path segment may begin with a dot. Workers Static Assets answers 403
+//     for one - not 404, and not at build time - so a repository whose name
+//     starts with a dot publishes a board that every link on this site points
+//     at and nobody can open. `rknightion/.github` is exactly that case.
+const dotted = pages
+  .map((file) => path.relative(DIST, file))
+  .filter((rel) => rel.split("/").some((seg) => seg.startsWith(".")));
+if (dotted.length) {
+  fail(
+    `${dotted.length} built paths have a dot-leading segment, which the edge ` +
+      `refuses with 403: e.g. ${dotted[0]}`,
+  );
+} else {
+  console.log("  no dot-leading path segments");
+}
+
+// 12. Every link preview image a page claims must exist and must have had text
+//     rendered into it. The rasteriser resolves the generic font stack against
+//     whatever the build machine has; when it finds nothing it renders the
+//     canvas and no glyphs, which is a valid PNG of roughly a tenth the size.
+const OG_FLOOR = 12_000;
+const claimedImages = new Set();
+for (const html of contents.values()) {
+  for (const m of html.matchAll(
+    /property="og:image" content="[^"]*?(\/og\/[^"]+)"/g,
+  )) {
+    claimedImages.add(m[1]);
+  }
+}
+const badImages = [];
+for (const url of claimedImages) {
+  const file = path.join(DIST, url);
+  if (!exists(file)) badImages.push(`${url} (missing)`);
+  else if (statSync(file).size < OG_FLOOR) {
+    badImages.push(`${url} (${statSync(file).size} bytes; no text rendered?)`);
+  }
+}
+if (claimedImages.size === 0) {
+  fail("no page declares an og:image");
+} else if (badImages.length) {
+  fail(
+    `${badImages.length} link preview images are unusable: ${badImages.slice(0, 3).join(", ")}`,
+  );
+} else {
+  console.log(`  ${claimedImages.size} link preview images render text`);
 }
 
 if (process.exitCode) {
