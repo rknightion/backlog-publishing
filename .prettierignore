@@ -1,0 +1,10 @@
+# Backlog.md owns every file here and rewrites them through its CLI. Letting
+# Prettier reformat one means the next `backlog task edit` reverts it and the
+# gate goes red on a file nobody touched. Its section boundaries are HTML
+# comment markers, and a reflow that breaks one silently drops the section.
+backlog/
+
+dist/
+.backlog-cache/
+.astro/
+package-lock.json
