@@ -105,7 +105,13 @@ const { showProject = false, showStatus = false } = Astro.props;
     function readURL() {
       const params = new URL(location.href).searchParams;
       for (const key of KEYS) field(key).value = params.get(key) ?? "";
-      board!.dataset.view = params.get("view") === "list" ? "list" : "board";
+      // Fall back to whatever the page rendered, not to "board": the
+      // fleet-wide pages have one column and are a list by design, and
+      // hard-coding the fallback flipped them the moment this script ran.
+      const fallback = board!.dataset.defaultView === "list" ? "list" : "board";
+      const asked = params.get("view");
+      board!.dataset.view =
+        asked === "list" ? "list" : asked === "board" ? "board" : fallback;
     }
 
     function update(writeURL = true) {
@@ -150,8 +156,14 @@ const { showProject = false, showStatus = false } = Astro.props;
           if (filter[key]) url.searchParams.set(key, filter[key]);
           else url.searchParams.delete(key);
         }
-        if (list) url.searchParams.set("view", "list");
-        else url.searchParams.delete("view");
+        // Only record a view that differs from the page's own default, so a
+        // shared URL carries a deliberate choice rather than the status quo.
+        const fallback = board!.dataset.defaultView === "list" ? "list" : "board";
+        if ((list ? "list" : "board") !== fallback) {
+          url.searchParams.set("view", list ? "list" : "board");
+        } else {
+          url.searchParams.delete("view");
+        }
         // replaceState, not pushState: pushState would add one Back stop per
         // keystroke and make the back button useless.
         history.replaceState(history.state, "", url);
