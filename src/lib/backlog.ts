@@ -6,12 +6,14 @@
 
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
-// js-yaml 4's `load` is safe by default: its schema constructs only standard
-// YAML types, and the JS-specific ones live in a separate package we do not
-// install. There is no `safeLoad` to reach for - it was removed when `load`
-// became the safe one. This matters because every file parsed here comes from
-// a third-party repository.
-import yaml from "js-yaml";
+// Named import: js-yaml 5 removed the default export, and importing one gives
+// `undefined` at run time rather than a build error.
+//
+// `load` is safe by default and v5 is stricter still: the Type class and
+// DEFAULT_SCHEMA are gone, and `!!js/function`, `!!js/eval` and `!!python/*`
+// all raise YAMLException rather than constructing anything. That matters
+// because every file parsed here comes from a third-party repository.
+import { load as loadYaml } from "js-yaml";
 
 export const CACHE_DIR = path.resolve("./.backlog-cache");
 
@@ -162,7 +164,7 @@ export interface TrackerConfig {
 export function readConfig(project: string): TrackerConfig {
   const file = path.join(CACHE_DIR, project, "backlog", "config.yml");
   const raw = existsSync(file)
-    ? (yaml.load(readFileSync(file, "utf8")) as any)
+    ? (loadYaml(readFileSync(file, "utf8")) as any)
     : {};
   const statuses: string[] = Array.isArray(raw?.statuses)
     ? raw.statuses.map((s: unknown) => String(s))
@@ -179,7 +181,7 @@ export function readConfig(project: string): TrackerConfig {
 function splitFrontMatter(text: string): { meta: TrackerMeta; body: string } {
   const match = FRONT_MATTER.exec(text);
   if (!match) return { meta: {}, body: text };
-  const parsed = yaml.load(match[1]);
+  const parsed = loadYaml(match[1]);
   return {
     meta: (parsed && typeof parsed === "object" ? parsed : {}) as TrackerMeta,
     body: text.slice(match[0].length),
@@ -315,7 +317,18 @@ export function sourceDate(meta: TrackerMeta): Date | null {
   // else: a decision has no updated_date, so without this every decision is
   // undated and any page that indexes them has no lastmod to report.
   for (const key of ["updated_date", "created_date", "date"] as const) {
-    const raw = asText(meta[key]).trim();
+    // A bare `2026-01-01` is a Date under js-yaml 4's schema and a string
+    // under 5's. Take the Date as given rather than stringifying it: its
+    // `String()` form is `Thu Jan 01 2026 ...`, which the normalisation below
+    // turns into an unparseable `ThuTJan`, and the record silently loses its
+    // date. Every tracker in the fleet quotes its dates today, so this is
+    // insurance against one that does not rather than a live fix.
+    const value = meta[key];
+    if (value instanceof Date) {
+      if (!Number.isNaN(value.getTime())) return value;
+      continue;
+    }
+    const raw = asText(value).trim();
     if (!raw) continue;
     // Backlog writes `2026-08-14 16:58` (no zone). Treat it as UTC rather than
     // as the build machine's local time, or lastmod moves with the runner.

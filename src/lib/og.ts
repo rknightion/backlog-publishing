@@ -57,6 +57,34 @@ function wrap(text: string, perLine: number, maxLines: number): string[] {
   return lines;
 }
 
+// Horizontal room for the title: the canvas less the left inset and an equal
+// gutter on the right.
+const TITLE_WIDTH = OG_WIDTH - 160;
+// Mean advance width of the bold generic sans, as a fraction of the font size.
+// Deliberately pessimistic: overestimating shrinks a card's title slightly,
+// underestimating runs it off the canvas where nothing would report it.
+const GLYPH_RATIO = 0.62;
+const MAX_TITLE_SIZE = 88;
+const MIN_TITLE_SIZE = 32;
+
+/**
+ * Font size for a card title, from the width it has to fit rather than from
+ * length bands. Repository names arrive from GitHub auto-discovery, so the
+ * longest one this site will ever draw is not knowable here.
+ */
+export function titleFontSize(title: string): number {
+  const ideal = Math.floor(
+    TITLE_WIDTH / (Math.max(title.length, 1) * GLYPH_RATIO),
+  );
+  return Math.max(MIN_TITLE_SIZE, Math.min(MAX_TITLE_SIZE, ideal));
+}
+
+/** The title, truncated if it would overrun even at the smallest size. */
+export function fitTitle(title: string): string {
+  const max = Math.floor(TITLE_WIDTH / (MIN_TITLE_SIZE * GLYPH_RATIO));
+  return title.length <= max ? title : `${title.slice(0, max - 1)}\u2026`;
+}
+
 export interface CardInput {
   /** Small label above the title. */
   eyebrow: string;
@@ -72,8 +100,8 @@ export function cardSvg({
   description,
   facts,
 }: CardInput): string {
-  // Long repository names have to shrink or they overflow the canvas.
-  const titleSize = title.length > 26 ? 60 : title.length > 18 ? 74 : 88;
+  const shown = fitTitle(title);
+  const titleSize = titleFontSize(shown);
   const lines = wrap(description, 58, 3);
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${OG_WIDTH}" height="${OG_HEIGHT}" viewBox="0 0 ${OG_WIDTH} ${OG_HEIGHT}">
@@ -81,7 +109,7 @@ export function cardSvg({
   <rect width="${OG_WIDTH}" height="8" fill="${ACCENT}"/>
   <g font-family="${FONT}">
     <text x="80" y="150" fill="${ACCENT}" font-size="28" letter-spacing="4">${esc(eyebrow.toUpperCase())}</text>
-    <text x="80" y="${150 + titleSize + 24}" fill="${INK}" font-size="${titleSize}" font-weight="bold">${esc(title)}</text>
+    <text x="80" y="${150 + titleSize + 24}" fill="${INK}" font-size="${titleSize}" font-weight="bold">${esc(shown)}</text>
     ${lines
       .map(
         (line, i) =>

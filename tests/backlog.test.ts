@@ -194,3 +194,24 @@ test("urlSegment leaves an ordinary name alone", () => {
   assert.equal(urlSegment("sf2loki"), "sf2loki");
   assert.equal(urlSegment("meraki-dashboard-ha"), "meraki-dashboard-ha");
 });
+
+test("sourceDate takes a Date the YAML layer already built, rather than restringifying it", () => {
+  // A bare `2026-01-01` is a Date under js-yaml 4's schema and a string under
+  // 5's. Stringifying the Date gives `Thu Jan 01 2026 ...`, which the naive
+  // normalisation turns into `ThuTJan` and the record loses its date entirely.
+  const date = new Date("2026-03-04T05:06:00Z");
+  assert.equal(
+    sourceDate({ created_date: date } as never)?.toISOString(),
+    date.toISOString(),
+  );
+});
+
+test("sourceDate skips an invalid Date and falls through to the next key", () => {
+  assert.equal(
+    sourceDate({
+      updated_date: new Date("nonsense"),
+      created_date: "2026-01-02 03:04",
+    } as never)?.toISOString(),
+    "2026-01-02T03:04:00.000Z",
+  );
+});

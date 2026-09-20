@@ -9,7 +9,9 @@
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",
   "semanticCommitScope": "deps",
-  "lockFileMaintenance": { "enabled": true },
+  "lockFileMaintenance": {
+    "enabled": true
+  },
   "packageRules": [
     {
       "description": "Astro and its Vite toolchain move together; one PR, one build to verify.",
@@ -20,6 +22,11 @@
       "description": "The design system is ours. Take it promptly so the site does not drift from m7kni.io.",
       "matchPackageNames": ["@m7kni/tokens"],
       "automerge": true
+    },
+    {
+      "description": "TypeScript 7 is the native compiler and does not ship the programmatic API `astro check` is built on; @astrojs/language-server refuses to run and says to stay on 6.x. Lift this when withastro/roadmap#1321 lands, not before.",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<7"
     }
   ]
 }
