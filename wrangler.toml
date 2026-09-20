@@ -1,0 +1,28 @@
+name = "backlogs-m7kni-io"
+account_id = "05350251028e01d89908772a9059e288"
+# Keep this within the workerd version bundled with the pinned Wrangler.
+compatibility_date = "2026-08-04"
+workers_dev = false
+preview_urls = false
+
+# Assets only. There is no Worker script and no adapter: wrangler points its
+# asset store at dist/ and every request is served from the edge, unbilled.
+[assets]
+directory = "./dist"
+not_found_handling = "404-page"
+
+[[routes]]
+pattern = "backlogs.m7kni.io"
+custom_domain = true
+
+# Every Worker in this account ships logs and traces to Grafana Cloud. A Worker
+# that only logs to the Cloudflare dashboard is not finished.
+[observability.logs]
+enabled = true
+persist = false
+destinations = ["grafana-logs"]
+
+[observability.traces]
+enabled = true
+persist = false
+destinations = ["grafana-traces"]

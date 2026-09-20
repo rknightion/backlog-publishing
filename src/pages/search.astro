@@ -1,0 +1,60 @@
+---
+import Base from "../layouts/Base.astro";
+
+// Pagefind's assets are produced after `astro build`, by scripts/build.mjs, so
+// they do not exist during the Astro build and must not be imported. They are
+// loaded at runtime from /pagefind/, which is why this page has no import of
+// its own for them.
+---
+
+<Base
+  title="Search the backlogs"
+  description="Full-text search across every published Backlog.md tracker."
+  noindex
+>
+  <p class="eyebrow">Search</p>
+  <h1>Search every backlog</h1>
+  <p class="lede">
+    Full-text across every task, document and decision on this site. Filter by project once
+    you have results.
+  </p>
+
+  <div id="search" data-pagefind-ignore></div>
+
+  <noscript>
+    <p class="lede">
+      Search needs JavaScript. Without it, start from the <a href="/">project index</a>: every
+      board and every task is a plain page.
+    </p>
+  </noscript>
+
+  <link href="/pagefind/pagefind-ui.css" rel="stylesheet" />
+  <script is:inline src="/pagefind/pagefind-ui.js"></script>
+  <script is:inline>
+    window.addEventListener("DOMContentLoaded", () => {
+      if (typeof PagefindUI === "undefined") return;
+      new PagefindUI({
+        element: "#search",
+        showSubResults: true,
+        showImages: false,
+        pageSize: 10,
+      });
+    });
+  </script>
+
+  <style is:global>
+    /* Pagefind ships its own variables; point them at the design tokens so the
+       widget is not a differently-styled island on the page. */
+    #search {
+      --pagefind-ui-scale: 0.85;
+      --pagefind-ui-primary: var(--color-fg-default);
+      --pagefind-ui-text: var(--color-fg-default);
+      --pagefind-ui-background: var(--color-bg-canvas);
+      --pagefind-ui-border: var(--color-border-default);
+      --pagefind-ui-tag: var(--color-bg-surface);
+      --pagefind-ui-border-width: 1px;
+      --pagefind-ui-border-radius: var(--radius-control);
+      --pagefind-ui-font: var(--font-family-sans);
+    }
+  </style>
+</Base>

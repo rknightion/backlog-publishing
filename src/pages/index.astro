@@ -1,0 +1,41 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../layouts/Base.astro";
+
+const projects = (await getCollection("projects")).sort((a, b) =>
+  a.data.slug.localeCompare(b.data.slug),
+);
+
+const totalOpen = projects.reduce((sum, p) => sum + p.data.openCount, 0);
+const totalDone = projects.reduce((sum, p) => sum + p.data.completedCount, 0);
+---
+
+<Base
+  title="Backlogs - m7kni.io"
+  description={`Public project trackers for ${projects.length} open-source repositories: ${totalOpen} open tasks and ${totalDone} completed.`}
+>
+  <p class="eyebrow">Project workspace</p>
+  <h1>What I am working on.</h1>
+  <p class="lede">
+    Every public repository here keeps its plan in the repository itself, as Backlog.md
+    Markdown. This publishes those trackers as they are: {projects.length} projects,
+    {totalOpen} open tasks, {totalDone} completed. Read-only, and the repository is always
+    the source of truth.
+  </p>
+
+  <div class="grid">
+    {
+      projects.map((project) => (
+        <a class="card" href={`/${project.data.slug}/`}>
+          <h2>{project.data.slug}</h2>
+          <p>{project.data.description || "No description."}</p>
+          <span class="card-foot">
+            <span>{project.data.openCount} open</span>
+            <span>{project.data.completedCount} done</span>
+            {project.data.language && <span>{project.data.language}</span>}
+          </span>
+        </a>
+      ))
+    }
+  </div>
+</Base>

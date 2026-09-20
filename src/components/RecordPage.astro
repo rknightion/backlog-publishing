@@ -1,0 +1,91 @@
+---
+import Base from "../layouts/Base.astro";
+import type { CollectionEntry } from "astro:content";
+
+type AnyRecord =
+  | CollectionEntry<"tasks">
+  | CollectionEntry<"milestones">
+  | CollectionEntry<"trackerDocs">
+  | CollectionEntry<"decisions">;
+
+interface Props {
+  entry: AnyRecord;
+  /** "Task", "Document", "Decision" - the eyebrow above the title. */
+  kind: string;
+  Content: any;
+}
+
+const { entry, kind, Content } = Astro.props;
+const d = entry.data;
+
+// Only fields that were actually set. An empty row is noise, and a table of
+// "Unspecified" tells a reader nothing.
+const rows: Array<[string, string]> = [];
+if (d.status && d.status !== "Unspecified") rows.push(["Status", d.status]);
+if (d.priority && d.priority !== "Unspecified") rows.push(["Priority", d.priority]);
+if (d.labels.length) rows.push(["Labels", d.labels.join(", ")]);
+if (d.milestone && d.milestone !== "Unassigned") rows.push(["Milestone", d.milestone]);
+if (d.parent) rows.push(["Parent", d.parent]);
+if (d.dependencies.length) rows.push(["Dependencies", d.dependencies.join(", ")]);
+if (d.lastmod) {
+  rows.push(["Updated", d.lastmod.toISOString().slice(0, 10)]);
+}
+
+const sourceUrl = `${d.repoUrl}/blob/HEAD/${d.sourcePath}`;
+---
+
+<Base
+  title={`${d.taskId}: ${d.title} - ${d.project}`}
+  description={`${kind} ${d.taskId} in the ${d.project} backlog: ${d.title}`}
+  noindex
+>
+  <p class="breadcrumb">
+    <a href="/">Projects</a> / <a href={`/${d.project}/`}>{d.project}</a> / {d.taskId}
+  </p>
+  <p class="eyebrow">{kind} &middot; {d.taskId}</p>
+  <h1>{d.title}</h1>
+
+  {
+    rows.length > 0 && (
+      <dl class="meta-table">
+        {rows.map(([label, value]) => (
+          <div>
+            <dt>{label}</dt>
+            <dd>{value}</dd>
+          </div>
+        ))}
+      </dl>
+    )
+  }
+
+  {/* data-pagefind-body scopes the search index to the record itself. Without
+      it Pagefind indexes the whole page, so every result matches the nav. */}
+  <article class="prose" data-pagefind-body data-pagefind-filter={`project:${d.project}`}>
+    <Content />
+  </article>
+
+  {
+    d.references.length > 0 && (
+      <>
+        <h2>References</h2>
+        <ul>
+          {d.references.map((ref) =>
+            /^https?:\/\//.test(ref) ? (
+              <li>
+                <a href={ref} rel="noopener">
+                  {ref}
+                </a>
+              </li>
+            ) : (
+              <li>{ref}</li>
+            ),
+          )}
+        </ul>
+      </>
+    )
+  }
+
+  <p class="results" style="margin-top: var(--space-8)">
+    <a href={sourceUrl} rel="noopener">View the source file on GitHub</a>
+  </p>
+</Base>

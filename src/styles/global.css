@@ -1,0 +1,529 @@
+/* The design system is the npm package, never a copy. Every colour, space,
+   radius and type step below reads a token from it, so a change there reaches
+   this site through Renovate instead of drifting. */
+@import "@m7kni/tokens/tokens.css";
+@import "@fontsource-variable/hanken-grotesk";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* The tokens ship light values on :root and dark under [data-theme="dark"].
+   That covers an explicit choice but not a visitor who has simply set their OS
+   to dark and never touched our toggle, so mirror the dark block onto the media
+   query, guarded so an explicit light choice still wins. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --color-bg-canvas: oklch(0.193 0.012 240);
+    --color-bg-surface: oklch(0.225 0.014 240);
+    --color-bg-raised: oklch(0.259 0.015 240);
+    --color-bg-hover: oklch(0.298 0.017 240);
+    --color-bg-selected: oklch(0.32 0.028 235);
+    --color-bg-track: oklch(0.283 0.015 240);
+    --color-bg-inverse: oklch(0.93 0.006 227);
+    --color-fg-default: oklch(0.948 0.005 227);
+    --color-fg-soft: oklch(0.86 0.008 227);
+    --color-fg-muted: oklch(0.728 0.013 230);
+    --color-fg-faint: oklch(0.6 0.016 232);
+    --color-fg-on-inverse: oklch(0.2 0.012 240);
+    --color-border-default: oklch(0.34 0.018 238);
+    --color-border-strong: oklch(0.44 0.022 236);
+    --color-bg-accent: oklch(0.72 0.094 232);
+    --color-bg-accent-soft: oklch(0.32 0.048 234);
+    --color-accent-hover: oklch(0.78 0.088 232);
+    --color-fg-on-accent: oklch(0.17 0.014 240);
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg-canvas);
+  color: var(--color-fg-default);
+  font-family: var(--font-family-sans);
+  font-size: var(--font-size-md);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--color-bg-accent);
+  text-decoration-color: color-mix(
+    in oklch,
+    var(--color-bg-accent) 40%,
+    transparent
+  );
+  text-underline-offset: 2px;
+}
+a:hover {
+  color: var(--color-accent-hover);
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-family-mono);
+  font-size: 0.92em;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-bg-accent);
+  outline-offset: 2px;
+}
+
+/* A link whose destination could not be proved from the ingest cache. The text
+   survives; the dead target does not. */
+.backlog-unlinked {
+  color: var(--color-fg-muted);
+  border-bottom: 1px dotted var(--color-border-strong);
+}
+
+.shell {
+  width: min(1180px, 100% - 2 * var(--space-6));
+  margin-inline: auto;
+}
+
+/* ---------------------------------------------------------------- chrome -- */
+
+.site-header {
+  border-bottom: 1px solid var(--color-border-default);
+  background: var(--color-bg-surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.site-header > .shell {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  min-height: 56px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-fg-default);
+  text-decoration: none;
+}
+.brand small {
+  display: block;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--font-size-xs);
+  color: var(--color-fg-muted);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.site-header nav {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  font-size: var(--font-size-sm);
+}
+
+.theme-toggle {
+  border: 1px solid var(--color-border-default);
+  background: var(--color-bg-raised);
+  color: var(--color-fg-soft);
+  border-radius: var(--radius-control);
+  padding: var(--space-1) var(--space-3);
+  font: inherit;
+  font-size: var(--font-size-xs);
+  cursor: pointer;
+}
+.theme-toggle:hover {
+  background: var(--color-bg-hover);
+}
+
+.site-footer {
+  margin-top: var(--space-16);
+  border-top: 1px solid var(--color-border-default);
+  padding-block: var(--space-6);
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-sm);
+}
+.site-footer .shell {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  justify-content: space-between;
+}
+
+main {
+  padding-block: var(--space-8);
+}
+
+.eyebrow {
+  margin: 0 0 var(--space-2);
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+
+h1 {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+}
+.lede {
+  margin: 0 0 var(--space-8);
+  max-width: 68ch;
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-lg);
+}
+
+.breadcrumb {
+  margin-bottom: var(--space-4);
+  font-size: var(--font-size-sm);
+  color: var(--color-fg-muted);
+}
+.breadcrumb a {
+  color: var(--color-fg-muted);
+}
+
+/* ----------------------------------------------------------------- grid -- */
+
+.grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
+}
+
+.card {
+  display: block;
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-overlay);
+  background: var(--color-bg-surface);
+  color: inherit;
+  text-decoration: none;
+}
+a.card:hover {
+  background: var(--color-bg-hover);
+  border-color: var(--color-border-strong);
+}
+.card h2,
+.card h3 {
+  margin: 0 0 var(--space-2);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-semibold);
+}
+.card p {
+  margin: 0;
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-sm);
+}
+.card-foot {
+  margin-top: var(--space-4);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  color: var(--color-fg-faint);
+  font-size: var(--font-size-xs);
+}
+
+/* ---------------------------------------------------------------- board -- */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  align-items: end;
+  margin-bottom: var(--space-6);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-overlay);
+  background: var(--color-bg-surface);
+}
+.filters label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-size: var(--font-size-xs);
+  color: var(--color-fg-muted);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+}
+.filters input,
+.filters select {
+  min-width: 11rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-raised);
+  color: var(--color-fg-default);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.filter-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-left: auto;
+}
+.filters button {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-raised);
+  color: var(--color-fg-soft);
+  font: inherit;
+  font-size: var(--font-size-sm);
+  cursor: pointer;
+}
+.filters button:hover {
+  background: var(--color-bg-hover);
+}
+.results {
+  margin: 0 0 var(--space-4);
+  color: var(--color-fg-muted);
+  font-size: var(--font-size-sm);
+}
+
+.board {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
+  align-items: start;
+}
+.board[data-view="list"] {
+  grid-template-columns: 1fr;
+}
+
+.column {
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-overlay);
+  background: var(--color-bg-surface);
+  padding: var(--space-3);
+}
+.column > h2 {
+  margin: 0 0 var(--space-3);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-semibold);
+  letter-spacing: var(--tracking-label);
+  text-transform: uppercase;
+  color: var(--color-fg-muted);
+}
+.column > h2 span {
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-track);
+  color: var(--color-fg-soft);
+  font-variant-numeric: tabular-nums;
+}
+.column-items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.board[data-view="list"] .column-items {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr));
+}
+
+.task {
+  display: block;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-raised);
+  color: inherit;
+  text-decoration: none;
+  font-size: var(--font-size-sm);
+}
+.task:hover {
+  background: var(--color-bg-hover);
+}
+.task[hidden] {
+  display: none;
+}
+.task .id {
+  font-family: var(--font-family-mono);
+  font-size: var(--font-size-2xs);
+  color: var(--color-fg-faint);
+}
+.task .title {
+  display: block;
+  margin: var(--space-1) 0 var(--space-2);
+  color: var(--color-fg-default);
+  font-weight: var(--font-weight-medium);
+  line-height: 1.4;
+}
+.task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  font-size: var(--font-size-2xs);
+  color: var(--color-fg-muted);
+}
+.tag {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-bg-accent-soft);
+  color: var(--color-fg-soft);
+}
+
+/* Priority earns colour because it is the one field you scan a board for. */
+.prio-high,
+.prio-critical {
+  color: var(--color-status-fail);
+}
+.prio-medium {
+  color: var(--color-status-warn);
+}
+.prio-low {
+  color: var(--color-fg-faint);
+}
+
+progress {
+  width: 100%;
+  height: 6px;
+  accent-color: var(--color-bg-accent);
+}
+
+/* ---------------------------------------------------------------- prose -- */
+
+.prose {
+  max-width: 76ch;
+}
+.prose h2,
+.prose h3,
+.prose h4 {
+  margin: var(--space-8) 0 var(--space-3);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1.3;
+}
+.prose h2 {
+  font-size: var(--font-size-xl);
+}
+.prose h3 {
+  font-size: var(--font-size-lg);
+}
+.prose h4 {
+  font-size: var(--font-size-md);
+}
+.prose pre {
+  padding: var(--space-4);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-overlay);
+  overflow-x: auto;
+}
+.prose :not(pre) > code {
+  padding: 1px var(--space-1);
+  border-radius: var(--radius-control);
+  background: var(--color-bg-track);
+}
+.prose blockquote {
+  margin: var(--space-4) 0;
+  padding-left: var(--space-4);
+  border-left: 3px solid var(--color-border-strong);
+  color: var(--color-fg-muted);
+}
+.prose table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--font-size-sm);
+}
+.prose th,
+.prose td {
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--color-border-default);
+  text-align: left;
+  vertical-align: top;
+}
+.prose img {
+  max-width: 100%;
+  height: auto;
+}
+.prose ul[class*="contains-task-list"] {
+  list-style: none;
+  padding-left: var(--space-4);
+}
+
+/* Shiki ships both themes; the CSS variables choose, so a code block follows
+   the page instead of being burned in at build time. */
+:root:not([data-theme="dark"]) .astro-code,
+:root:not([data-theme="dark"]) .astro-code span {
+  color: var(--shiki-light) !important;
+  background-color: var(--shiki-light-bg) !important;
+}
+[data-theme="dark"] .astro-code,
+[data-theme="dark"] .astro-code span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .astro-code,
+  :root:not([data-theme="light"]) .astro-code span {
+    color: var(--shiki-dark) !important;
+    background-color: var(--shiki-dark-bg) !important;
+  }
+}
+
+.meta-table {
+  margin-bottom: var(--space-6);
+  border: 1px solid var(--color-border-default);
+  border-radius: var(--radius-overlay);
+  overflow: hidden;
+  font-size: var(--font-size-sm);
+}
+.meta-table div {
+  display: grid;
+  grid-template-columns: minmax(8rem, 1fr) 3fr;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--color-border-default);
+}
+.meta-table div:last-child {
+  border-bottom: 0;
+}
+.meta-table dt {
+  margin: 0;
+  color: var(--color-fg-muted);
+}
+.meta-table dd {
+  margin: 0;
+}
+
+@media (max-width: 640px) {
+  .filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .filter-actions {
+    margin-left: 0;
+  }
+  .meta-table div {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
+}
+
+@media print {
+  .site-header,
+  .site-footer,
+  .filters,
+  .results {
+    display: none;
+  }
+  .board {
+    display: block;
+  }
+}

@@ -1,0 +1,90 @@
+name: Build and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  # The site's only freshness mechanism. Trackers live in 24 other repositories
+  # and none of them knows this site exists, which is the point: a new public
+  # repo with a backlog/ directory is published without touching anything here.
+  # The cost of that is polling, so this runs often enough that a task closed in
+  # the morning is not still open on the board at lunchtime.
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One group for the whole repository, and never cancelled. Two deploys in
+# flight would race over the same asset upload, and a cancelled one can leave
+# the upload half-applied. A PR build publishes nothing, so it may cancel.
+concurrency:
+  group: >-
+    ${{ github.event_name == 'pull_request'
+        && format('backlogs-pr-{0}', github.event.pull_request.number)
+        || 'backlogs-production' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # exchanged for a tailnet identity and an OpenBao token
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Read the Node pin
+        id: node
+        run: awk -F '"' '/^node_version := / { print "version=" $2 }' justfile >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          cache: npm
+
+      # GitHub-hosted runners have no just, and only this side pins it. Never
+      # add a second pin: whichever installs last wins on PATH, so a one-sided
+      # bump would quietly make the other a lie.
+      - name: Set up just
+        uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: "1.58.0"
+
+      - name: Install the project
+        run: just setup
+
+      # Reads only public repositories, so the job's own GITHUB_TOKEN is enough
+      # and no credential is minted for this step.
+      - name: Fetch every public tracker
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: just fetch
+
+      - name: Build, index and verify
+        run: just check
+
+      # After the build, so a camden outage does not burn the gate first: a
+      # failure here is infrastructure, not the commit.
+      - name: Read the deploy credential from OpenBao
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: rknightion/.github/.github/actions/bao-secret@06d6727487515cd6628e01696af6f886f1421e04
+        with:
+          role: backlogs-m7kni-io
+          path: brewmdm/backlogs-m7kni-io
+          # GitHub-hosted runners are not on the tailnet, so join it as an
+          # ephemeral tag:gha node. Both inputs are identifiers, not secrets.
+          tailscale-client-id: ${{ secrets.TS_WIF_CLIENT_ID }}
+          tailscale-audience: ${{ secrets.TS_WIF_AUDIENCE }}
+
+      - name: Deploy
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@ebbaa1584979971c8614a24965b4405ff95890e0 # v4
+        with:
+          apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}

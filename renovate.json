@@ -1,0 +1,25 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "timezone": "Europe/London",
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+  "lockFileMaintenance": { "enabled": true },
+  "packageRules": [
+    {
+      "description": "Astro and its Vite toolchain move together; one PR, one build to verify.",
+      "matchPackageNames": ["astro", "@astrojs/**", "vite"],
+      "groupName": "astro"
+    },
+    {
+      "description": "The design system is ours. Take it promptly so the site does not drift from m7kni.io.",
+      "matchPackageNames": ["@m7kni/tokens"],
+      "automerge": true
+    }
+  ]
+}

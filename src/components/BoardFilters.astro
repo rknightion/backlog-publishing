@@ -1,0 +1,142 @@
+---
+// Progressive enhancement only. Every task and every link is in the server
+// HTML; this script only hides cards. With JS off the board is complete, which
+// is the whole point of rendering it server-side.
+---
+
+<form class="filters" hidden aria-label="Filter tasks" data-board-filters>
+  <label>
+    Find a task
+    <input name="q" type="search" placeholder="Search ID or title" autocomplete="off" />
+  </label>
+  <label>
+    Priority
+    <select name="priority"><option value="">All priorities</option></select>
+  </label>
+  <label>
+    Label
+    <select name="label"><option value="">All labels</option></select>
+  </label>
+  <label>
+    Milestone
+    <select name="milestone"><option value="">All milestones</option></select>
+  </label>
+  <div class="filter-actions">
+    <button type="reset">Clear</button>
+    <button type="button" data-view-toggle aria-pressed="false">List view</button>
+  </div>
+</form>
+<p class="results" role="status" aria-live="polite" hidden data-board-results></p>
+<p class="results" hidden data-board-empty>No tasks match these filters. Clear them to see all tasks.</p>
+
+<script>
+  const KEYS = ["q", "priority", "label", "milestone"] as const;
+
+  function init() {
+    const form = document.querySelector<HTMLFormElement>("[data-board-filters]");
+    const board = document.querySelector<HTMLElement>("[data-board]");
+    if (!form || !board || form.dataset.ready) return;
+
+    const results = document.querySelector<HTMLElement>("[data-board-results]");
+    const empty = document.querySelector<HTMLElement>("[data-board-empty]");
+    const toggle = form.querySelector<HTMLButtonElement>("[data-view-toggle]");
+    if (!results || !empty || !toggle) return;
+
+    const cards = Array.from(board.querySelectorAll<HTMLElement>("[data-task]")).map((el) => ({
+      el,
+      text: `${el.dataset.id ?? ""} ${el.dataset.title ?? ""}`,
+      priority: el.dataset.priority ?? "",
+      labels: JSON.parse(el.dataset.labels ?? "[]") as string[],
+      milestone: el.dataset.milestone ?? "",
+    }));
+
+    for (const key of ["priority", "label", "milestone"] as const) {
+      const select = form.elements.namedItem(key) as HTMLSelectElement;
+      const values = [
+        ...new Set(cards.flatMap((c) => (key === "label" ? c.labels : [c[key]]))),
+      ]
+        .filter(Boolean)
+        .sort();
+      for (const value of values) select.add(new Option(value, value));
+    }
+
+    function readURL() {
+      const params = new URL(location.href).searchParams;
+      for (const key of KEYS) {
+        (form!.elements.namedItem(key) as HTMLInputElement).value = params.get(key) ?? "";
+      }
+      board!.dataset.view = params.get("view") === "list" ? "list" : "board";
+    }
+
+    function update(writeURL = true) {
+      const filter = Object.fromEntries(
+        KEYS.map((k) => [k, (form!.elements.namedItem(k) as HTMLInputElement).value]),
+      ) as Record<(typeof KEYS)[number], string>;
+      const query = filter.q.trim().toLowerCase();
+
+      let shown = 0;
+      for (const card of cards) {
+        const visible =
+          (!query || card.text.includes(query)) &&
+          (!filter.priority || card.priority === filter.priority) &&
+          (!filter.label || card.labels.includes(filter.label)) &&
+          (!filter.milestone || card.milestone === filter.milestone);
+        card.el.hidden = !visible;
+        if (visible) shown++;
+      }
+
+      for (const column of board!.querySelectorAll<HTMLElement>(".column")) {
+        const count = column.querySelectorAll("[data-task]:not([hidden])").length;
+        const badge = column.querySelector("[data-column-count]");
+        if (badge) badge.textContent = String(count);
+        // Empty columns stay visible: a status is context even at zero.
+      }
+
+      results!.textContent = `${shown} of ${cards.length} tasks shown`;
+      empty!.hidden = shown !== 0;
+
+      const list = board!.dataset.view === "list";
+      toggle!.setAttribute("aria-pressed", String(list));
+      toggle!.textContent = list ? "Board view" : "List view";
+
+      if (writeURL) {
+        const url = new URL(location.href);
+        for (const key of KEYS) {
+          if (filter[key]) url.searchParams.set(key, filter[key]);
+          else url.searchParams.delete(key);
+        }
+        if (list) url.searchParams.set("view", "list");
+        else url.searchParams.delete("view");
+        // replaceState, not pushState: pushState would add one Back stop per
+        // keystroke and make the back button useless.
+        history.replaceState(history.state, "", url);
+      }
+    }
+
+    form.addEventListener("submit", (e) => e.preventDefault());
+    form.addEventListener("input", () => update());
+    form.addEventListener("change", () => update());
+    // A reset fires before the fields clear, so re-filter on the next tick.
+    form.addEventListener("reset", () => setTimeout(() => update(), 0));
+    toggle.addEventListener("click", () => {
+      board.dataset.view = board.dataset.view === "list" ? "board" : "list";
+      update();
+    });
+    window.addEventListener("popstate", () => {
+      readURL();
+      update(false);
+    });
+
+    readURL();
+    update(false);
+    form.dataset.ready = "true";
+    form.hidden = false;
+    results.hidden = false;
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", init);
+  } else {
+    init();
+  }
+</script>

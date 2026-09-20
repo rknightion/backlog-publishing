@@ -1,0 +1,81 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import TaskCard from "../../components/TaskCard.astro";
+import BoardFilters from "../../components/BoardFilters.astro";
+
+export async function getStaticPaths() {
+  const projects = await getCollection("projects");
+  const tasks = await getCollection("tasks");
+  return projects.map((project) => ({
+    params: { project: project.data.slug },
+    props: {
+      project,
+      tasks: tasks.filter((t) => t.data.project === project.data.slug),
+    },
+  }));
+}
+
+const { project, tasks } = Astro.props;
+const open = tasks.filter((t) => !t.data.completed);
+const columns = project.data.columns;
+
+const byColumn = columns.map((status) => ({
+  status,
+  items: open
+    .filter((t) => t.data.status === status)
+    .sort((a, b) => a.data.taskId.localeCompare(b.data.taskId)),
+}));
+
+// A status that survived deriveColumns but holds nothing is still rendered:
+// an empty column tells you the stage exists, which a missing one does not.
+---
+
+<Base
+  title={`${project.data.slug} backlog`}
+  description={`Task board for ${project.data.slug}: ${project.data.openCount} open tasks across ${columns.length} columns.`}
+>
+  <p class="breadcrumb"><a href="/">Projects</a> / {project.data.slug}</p>
+  <p class="eyebrow">Task board</p>
+  <h1>{project.data.slug}</h1>
+  <p class="lede">{project.data.description}</p>
+
+  <p class="results">
+    {project.data.openCount} open, {project.data.completedCount} completed &middot;
+    <a href={`/${project.data.slug}/completed/`}>Completed work</a>
+    {project.data.milestoneCount > 0 && (
+      <> &middot; <a href={`/${project.data.slug}/milestones/`}>Milestones</a></>
+    )}
+    &middot; <a href={project.data.repoUrl}>Repository</a>
+  </p>
+
+  {open.length > 0 && <BoardFilters />}
+
+  <div class="board" data-view="board" data-board>
+    {
+      byColumn.map(({ status, items }) => (
+        <section class="column" aria-label={`${status} tasks`}>
+          <h2>
+            {status}
+            <span data-column-count>{items.length}</span>
+          </h2>
+          <div class="column-items">
+            {items.map((task) => (
+              <TaskCard
+                project={task.data.project}
+                taskId={task.data.taskId}
+                title={task.data.title}
+                status={task.data.status}
+                priority={task.data.priority}
+                labels={task.data.labels}
+                milestone={task.data.milestone}
+              />
+            ))}
+          </div>
+        </section>
+      ))
+    }
+  </div>
+
+  {open.length === 0 && <p class="lede">No open tasks. Everything here is done.</p>}
+</Base>

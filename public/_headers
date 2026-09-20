@@ -1,0 +1,15 @@
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: DENY
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), interest-cohort=()
+
+# Content-hashed by Vite, so the name changes whenever the bytes do.
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# Pagefind's chunk filenames are content-derived but its entry point is not, so
+# an immutable year would pin visitors to a stale index after a rebuild. An hour
+# is long enough to make search feel instant and short enough to self-heal.
+/pagefind/*
+  Cache-Control: public, max-age=3600

@@ -1,0 +1,36 @@
+---
+interface Props {
+  project: string;
+  taskId: string;
+  title: string;
+  status: string;
+  priority: string;
+  labels: string[];
+  milestone: string | null;
+}
+
+const { project, taskId, title, status, priority, labels, milestone } = Astro.props;
+
+// The filter script reads these off the element. Labels go as JSON because a
+// label may legitimately contain a comma, which a delimited list would split.
+const priorityClass = `prio-${priority.toLowerCase().replace(/[^a-z]/g, "")}`;
+---
+
+<a
+  class="task"
+  href={`/${project}/tasks/${encodeURIComponent(taskId)}/`}
+  data-task
+  data-priority={priority}
+  data-labels={JSON.stringify(labels)}
+  data-milestone={milestone ?? "Unassigned"}
+  data-title={title.toLowerCase()}
+  data-id={taskId.toLowerCase()}
+>
+  <span class="id">{taskId}</span>
+  <span class="title">{title}</span>
+  <span class="task-meta">
+    <span class={priorityClass}>{priority}</span>
+    {milestone && milestone !== "Unassigned" && <span>{milestone}</span>}
+    {labels.map((label) => <span class="tag">{label}</span>)}
+  </span>
+</a>

@@ -1,0 +1,88 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import TaskCard from "../../components/TaskCard.astro";
+
+export async function getStaticPaths() {
+  const projects = await getCollection("projects");
+  const tasks = await getCollection("tasks");
+  const milestones = await getCollection("milestones");
+
+  return projects.map((project) => {
+    const slug = project.data.slug;
+    const mine = tasks.filter((t) => t.data.project === slug);
+
+    // Every milestone the tracker declares, then any milestone name a task
+    // claims that has no record of its own. A task pointing at a deleted
+    // milestone must still appear somewhere rather than vanishing.
+    const groups = new Map<string, { title: string; items: typeof mine }>();
+    for (const m of milestones.filter((m) => m.data.project === slug)) {
+      groups.set(m.data.taskId, { title: m.data.title, items: [] });
+    }
+    for (const task of mine) {
+      const key = task.data.milestoneKey ?? "Unassigned";
+      if (!groups.has(key)) {
+        groups.set(key, { title: task.data.milestone ?? key, items: [] });
+      }
+      groups.get(key)!.items.push(task);
+    }
+
+    return {
+      params: { project: slug },
+      props: { project, groups: [...groups.entries()].map(([key, g]) => ({ key, ...g })) },
+    };
+  });
+}
+
+const { project, groups } = Astro.props;
+---
+
+<Base
+  title={`${project.data.slug}: milestones`}
+  description={`Milestone progress across the ${project.data.slug} backlog.`}
+>
+  <p class="breadcrumb">
+    <a href="/">Projects</a> / <a href={`/${project.data.slug}/`}>{project.data.slug}</a> / Milestones
+  </p>
+  <p class="eyebrow">Milestones</p>
+  <h1>{project.data.slug}</h1>
+  <p class="lede">Progress across published tasks.</p>
+
+  {
+    groups.map((group) => {
+      const done = group.items.filter((t) => t.data.completed).length;
+      const total = group.items.length;
+      return (
+        <section style="margin-bottom: var(--space-12)">
+          <h2>{group.title}</h2>
+          {total > 0 && (
+            <p class="results">
+              <progress
+                max={total}
+                value={done}
+                aria-label={`${group.title}: ${done} of ${total} completed`}
+              />
+              {done} of {total} completed
+            </p>
+          )}
+          <div class="grid">
+            {group.items.map((task) => (
+              <TaskCard
+                project={task.data.project}
+                taskId={task.data.taskId}
+                title={task.data.title}
+                status={task.data.status}
+                priority={task.data.priority}
+                labels={task.data.labels}
+                milestone={task.data.milestone}
+              />
+            ))}
+          </div>
+          {total === 0 && <p class="results">No tasks assigned.</p>}
+        </section>
+      );
+    })
+  }
+
+  {groups.length === 0 && <p class="lede">This tracker declares no milestones.</p>}
+</Base>

@@ -1,0 +1,60 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import TaskCard from "../../components/TaskCard.astro";
+
+export async function getStaticPaths() {
+  const projects = await getCollection("projects");
+  const tasks = await getCollection("tasks");
+  return projects.map((project) => ({
+    params: { project: project.data.slug },
+    props: {
+      project,
+      done: tasks
+        .filter((t) => t.data.project === project.data.slug && t.data.completed)
+        // Newest first: finished work is read as a record of what happened.
+        .sort((a, b) => {
+          const at = a.data.lastmod?.getTime() ?? 0;
+          const bt = b.data.lastmod?.getTime() ?? 0;
+          return bt - at || a.data.taskId.localeCompare(b.data.taskId);
+        }),
+    },
+  }));
+}
+
+const { project, done } = Astro.props;
+---
+
+<Base
+  title={`${project.data.slug}: completed work`}
+  description={`${done.length} completed tasks in the ${project.data.slug} backlog.`}
+>
+  <p class="breadcrumb">
+    <a href="/">Projects</a> / <a href={`/${project.data.slug}/`}>{project.data.slug}</a> / Completed
+  </p>
+  <p class="eyebrow">Completed work</p>
+  <h1>{project.data.slug}</h1>
+  <p class="lede">{done.length} completed {done.length === 1 ? "task" : "tasks"}.</p>
+
+  <div class="board" data-view="list">
+    <section class="column">
+      <div class="column-items">
+        {
+          done.map((task) => (
+            <TaskCard
+              project={task.data.project}
+              taskId={task.data.taskId}
+              title={task.data.title}
+              status={task.data.status}
+              priority={task.data.priority}
+              labels={task.data.labels}
+              milestone={task.data.milestone}
+            />
+          ))
+        }
+      </div>
+    </section>
+  </div>
+
+  {done.length === 0 && <p class="lede">Nothing completed yet.</p>}
+</Base>

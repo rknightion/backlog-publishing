@@ -1,0 +1,30 @@
+{
+  "name": "backlog-publishing",
+  "version": "0.1.0",
+  "description": "Publishes every public rknightion Backlog.md tracker at backlogs.m7kni.io",
+  "private": true,
+  "author": "Rob Knight",
+  "license": "UNLICENSED",
+  "type": "module",
+  "dependencies": {
+    "@fontsource-variable/hanken-grotesk": "^5.3.0",
+    "@fontsource-variable/jetbrains-mono": "^5.3.0",
+    "@m7kni/tokens": "^0.3.0",
+    "astro": "^7.3.1",
+    "js-yaml": "^4.1.0",
+    "rehype-parse": "^9.0.1",
+    "rehype-stringify": "^10.0.1",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.1.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.10",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^26.6.2",
+    "pagefind": "^1.5.2",
+    "prettier": "^3.9.6",
+    "prettier-plugin-astro": "^0.14.1",
+    "typescript": "^6.0.3",
+    "wrangler": "^4.129.1"
+  }
+}

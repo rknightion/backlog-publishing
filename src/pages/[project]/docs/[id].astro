@@ -1,0 +1,17 @@
+---
+import { getCollection, render } from "astro:content";
+import RecordPage from "../../../components/RecordPage.astro";
+
+export async function getStaticPaths() {
+  const entries = await getCollection("trackerDocs");
+  return entries.map((entry) => ({
+    params: { project: entry.data.project, id: entry.data.taskId },
+    props: { entry },
+  }));
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+---
+
+<RecordPage entry={entry} kind="Document" Content={Content} />

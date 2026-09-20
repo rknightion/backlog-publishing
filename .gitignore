@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.backlog-cache/
+.astro/
+docs/superpowers/
+.DS_Store
