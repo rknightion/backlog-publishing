@@ -1,10 +1,10 @@
 ---
 id: BAP-0001
 title: Announce changed pages with IndexNow and join the fleet sitemap index
-status: In Progress
+status: Done
 assignee: []
 created_date: '2026-09-20 12:01'
-updated_date: '2026-09-20 12:09'
+updated_date: '2026-09-20 12:13'
 labels:
   - infra
 dependencies: []
@@ -29,7 +29,7 @@ Also slow the rebuild cron. Hourly was chosen when freshness was the only concer
 - [x] #1 A key file is served from the site root and the submission uses it as keyLocation
 - [x] #2 Only indexable URLs are submitted; noindex record pages are never announced
 - [x] #3 Submission is state-based so an unchanged lastmod is not re-announced, and HTTP 202 is treated as success
-- [ ] #4 m7kni.io's sitemap index lists this site's sitemap
+- [x] #4 m7kni.io's sitemap index lists this site's sitemap
 - [x] #5 The rebuild cron runs every 6 hours rather than hourly
 <!-- AC:END -->
 
@@ -45,4 +45,8 @@ State lives in an actions/cache entry keyed per run and restored by prefix, matc
 Cron moved from hourly to every 6 hours. Hourly predated IndexNow, when freshness was the only concern.
 
 Hub side: scripts/generate_sitemaps.py grows BACKLOG_SITE_URL and appends this site's sitemap to m7kni.io's sitemap index. Cross-host entries in a sitemap index are only honoured where both hosts are verified to one owner; both are m7kni.io properties.
+
+Verified live 2026-09-20: key file 200 at the site root, deploy run 35509910272 announced 52 URLs with HTTP 202, and m7kni.io/sitemap.xml lists https://backlogs.m7kni.io/sitemap.xml.
+
+52, not the 51 in the plan: adding this tracker made the site discover and publish itself, so the index is now 25 projects. The recursion works without a special case.
 <!-- SECTION:NOTES:END -->
