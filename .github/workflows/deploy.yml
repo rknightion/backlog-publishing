@@ -95,7 +95,7 @@ jobs:
       # Restored by prefix, so a run picks up whatever the last one announced.
       - name: Restore the IndexNow state
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .indexnow-state.json
           key: indexnow-state-${{ github.run_id }}-${{ github.run_attempt }}
@@ -111,7 +111,7 @@ jobs:
       # written; the restore above matches it by prefix.
       - name: Save the IndexNow state
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: .indexnow-state.json
           key: indexnow-state-${{ github.run_id }}-${{ github.run_attempt }}
