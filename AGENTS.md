@@ -100,6 +100,14 @@ corresponds to a failure that is otherwise **silent**, leaving a green build and
   Nothing in this repo produces it and nothing here can test it. Two consequences: do not
   build `.md` twins, and **do not use `<dl>`** - definition lists pass through that converter
   as raw HTML, which is why the record metadata is a `<ul>` with `<strong>` labels.
+- **Two hidden zone settings govern this site and neither is in this repository.**
+  `content_converter` is Markdown for Agents and stays **on**; `webmcp_enabled` injected a
+  47 KB agent bridge script into every page and is **off** since 2026-09-20. Neither appears
+  in `GET /zones/{zone}/settings`, which enumerates 56 settings and lists neither: address
+  them by name, `GET|PATCH /zones/{zone}/settings/<id>`. Changing one needs a cache purge to
+  reach already-cached HTML. Turning off the wrong one removes the Markdown representations
+  the agent-facing work depends on. The deploy workflow probes `/.webmcp/bridge.js` after
+  every release and expects a 404.
 - **A freshly deployed URL 404s at the Cloudflare edge briefly.** `Cache-Control: no-cache`
   is not enough on a brand-new path; add a query-string cache-buster before believing a 404.
 

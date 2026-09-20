@@ -107,6 +107,26 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         run: just indexnow
 
+      # The zone, not this repository, decides whether an agent bridge script
+      # is injected into every page. Nothing in dist/ can show it and no build
+      # assertion can reach it, so this probes the live origin instead.
+      # `continue-on-error` on purpose: a zone setting flipping back is worth
+      # seeing on the run, and is not a reason to mark a good release failed.
+      - name: Check the edge is not injecting an agent bridge
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        run: |
+          code=$(curl -sS --max-time 30 -o /dev/null -w '%{http_code}' \
+            "https://backlogs.m7kni.io/.webmcp/bridge.js")
+          if [ "$code" != "404" ]; then
+            echo "::error::webmcp_enabled looks back on for the zone:" \
+              "/.webmcp/bridge.js answered $code, expected 404." \
+              "Turn it off again: PATCH /zones/{zone}/settings/webmcp_enabled {\"value\":\"off\"}," \
+              "then purge the zone cache. Do NOT touch content_converter."
+            exit 1
+          fi
+          echo "no agent bridge injected (bridge.js 404)"
+
       # Saved under a run-unique key because a cache entry is immutable once
       # written; the restore above matches it by prefix.
       - name: Save the IndexNow state
