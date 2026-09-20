@@ -7,10 +7,13 @@ on:
   # The site's only freshness mechanism. Trackers live in 24 other repositories
   # and none of them knows this site exists, which is the point: a new public
   # repo with a backlog/ directory is published without touching anything here.
-  # The cost of that is polling, so this runs often enough that a task closed in
-  # the morning is not still open on the board at lunchtime.
+  # The cost of that is polling.
+  #
+  # Every 6 hours, not hourly. Most of these trackers move a few times a week,
+  # and each rebuild also announces its changes through IndexNow - hourly would
+  # mean pinging search engines about tracker churn nobody is searching for.
   schedule:
-    - cron: "17 * * * *"
+    - cron: "17 */6 * * *"
   workflow_dispatch:
 
 permissions:
@@ -88,3 +91,27 @@ jobs:
         with:
           apiToken: ${{ env.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ env.CLOUDFLARE_ACCOUNT_ID }}
+
+      # Restored by prefix, so a run picks up whatever the last one announced.
+      - name: Restore the IndexNow state
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: .indexnow-state.json
+          key: indexnow-state-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: indexnow-state-
+
+      # AFTER the deploy: announcing a URL that is still serving the previous
+      # build invites a crawl of content we just replaced. Never fails the run.
+      - name: Announce changed pages
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        run: just indexnow
+
+      # Saved under a run-unique key because a cache entry is immutable once
+      # written; the restore above matches it by prefix.
+      - name: Save the IndexNow state
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v4
+        with:
+          path: .indexnow-state.json
+          key: indexnow-state-${{ github.run_id }}-${{ github.run_attempt }}

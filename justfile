@@ -51,6 +51,13 @@ build:
 dev:
     npx astro dev
 
+# Announce changed indexable pages to the search engines.
+[group('release')]
+indexnow:
+    node scripts/submit-indexnow.mjs \
+        --key-file public/633e353b9bc31ed8e77514b706c19060.txt \
+        --state .indexnow-state.json
+
 # Show what a deploy would upload, without uploading it.
 [group('release')]
 dry-run:

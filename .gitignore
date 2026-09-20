@@ -4,3 +4,4 @@ dist/
 .astro/
 docs/superpowers/
 .DS_Store
+.indexnow-state.json
