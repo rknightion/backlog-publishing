@@ -1,9 +1,10 @@
 ---
 id: BAP-0010
 title: 'CI hygiene: stable IndexNow cache key and a ci-success aggregator'
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-26 15:55'
+updated_date: '2026-09-26 17:16'
 labels: []
 dependencies: []
 priority: high
@@ -22,6 +23,18 @@ Context: fleet CI hygiene, tracked centrally as GHC-0006 in rknightion/.github. 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 IndexNow state uses a single stable cache entry
-- [ ] #2 deploy.yml emits a ci-success check on PRs and on main
+- [x] #1 IndexNow state uses a single stable cache entry
+- [x] #2 deploy.yml emits a ci-success check on PRs and on main
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Fixed both acceptance criteria in .github/workflows/deploy.yml.
+
+1. IndexNow cache key: replaced the run/attempt-unique key with one stable key (indexnow-state) for both restore and save. Since GitHub will not overwrite an existing cache entry, the old entry is deleted before each save. That delete needs actions:write on the token, which is now isolated in a new save-indexnow-cache job (needs: deploy) rather than added to the deploy job itself, because deploy also runs npm ci / just check against pull_request code and giving that job repo-wide cache-delete rights would have been an unnecessary permission escalation reachable from PR-triggered dependency code (CodeRabbit flagged this as major on the first pass; fixed by splitting the job and handing the state file across via actions/upload-artifact + download-artifact). The delete step filters gh cache list results to an exact key match (gh's --key flag is prefix-matching, so an unfiltered match would have caught the 45+ old run-unique entries) and deletes every match via explicit command substitution rather than process substitution, so a real API/auth failure surfaces instead of being swallowed alongside the legitimate no-cache-yet case. The upload-artifact step sets include-hidden-files: true (.indexnow-state.json is a dotfile, silently dropped otherwise) and if-no-files-found: error.
+
+2. ci-success aggregator: added as its own job, if: always(), needs: [deploy, save-indexnow-cache], failing on any failure/cancelled result. deploy's deploy/IndexNow steps (and now save-indexnow-cache entirely) are already guarded to skip on pull_request, so a PR run reports ci-success once the build/check steps in deploy pass; save-indexnow-cache's skip there is legitimate (mirrors deploy's own guard) so it doesn't fail the aggregator.
+
+Verified: just check passes; actionlint clean; zizmor shows only one pre-existing high finding (cache-poisoning on the existing setup-node step, present before this change, unrelated to what changed here); CodeRabbit --agent --base main went from 2 major findings (job-permission scope, error-swallowing) through two more fix/re-review rounds (prefix-match over-matching, hidden-file/process-substitution issues) to 0 findings on the final pass.
+<!-- SECTION:FINAL_SUMMARY:END -->
