@@ -5,3 +5,6 @@ dist/
 docs/superpowers/
 .DS_Store
 .indexnow-state.json
+
+# loop-pi (pi-subagents writes .pi/subagents/)
+.pi/
