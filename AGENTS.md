@@ -3,9 +3,7 @@
 Publishes every public `rknightion` repository's Backlog.md tracker as a browsable site at
 `backlogs.m7kni.io`. Astro, static output, one assets-only Cloudflare Worker.
 
-This replaced the Backlog rendering that used to live in `m7kni-net-site`, where tracker
-content grew to 73% of the built pages and 65% of the search index of a site whose job is
-documentation. Docs and trackers are separate sites on purpose; do not reunite them.
+Docs and trackers are separate sites on purpose; do not reunite them.
 
 ## The model
 
@@ -17,8 +15,7 @@ nothing here changes.
 - **Private repositories are never published.** Visibility is the whole access-control model:
   everything on this site is already public on GitHub. There is no token, no allowlist and no
   private clone, and adding one would make a rule that currently cannot fail into one that
-  can. A private repo's backlog was once published by accident through the docs hub, which is
-  why this is stated rather than assumed.
+  can.
 - `drafts/` and `archive/` are withheld, enforced twice: the sparse-checkout pattern, and an
   allowlist sweep after clone. Two gates, because widening one for an unrelated reason must
   not publish drafts.
@@ -47,10 +44,8 @@ corresponds to a failure that is otherwise **silent**, leaving a green build and
 1. **Pagefind scope.** Pagefind honours `data-pagefind-body` only once at least one page
    carries it, and indexes whole pages otherwise. Losing the attribute gives you a search box
    that returns nav text forever.
-2. **Link resolution is not inert.** This has already happened once: the resolver was passed
-   to `renderMarkdown` as a `rehypePlugins` option, which that function accepts and discards
-   without warning. The build was clean and not one link was rewritten. It now runs as an
-   explicit pipeline over the rendered HTML, and the count is asserted.
+2. **Link resolution is not inert.** It runs as an explicit pipeline over the rendered HTML,
+   and the count is asserted; see the `renderMarkdown` trap below.
 3. **Boards render server-side.** Cards are in the HTML; JavaScript only hides them. Asserted
    as a count against the ingest manifest, because a project with no open tasks has an empty
    board legitimately.
@@ -61,8 +56,7 @@ corresponds to a failure that is otherwise **silent**, leaving a green build and
    them are not.
 7. **Nothing withheld reached the output.**
 8. **Every record page is linked from an index.** Records are noindex and out of the sitemap,
-   so a record nothing links to is published in name only. That is exactly what happened to
-   all 76 tracker documents until this check existed.
+   so a record nothing links to is published in name only.
 9. **`llms.txt` names the published projects, no more and no fewer.** It is generated from
    the same collections the pages are; a disagreement means the generator and the router have
    diverged.
@@ -101,10 +95,9 @@ corresponds to a failure that is otherwise **silent**, leaving a green build and
   build `.md` twins, and **do not use `<dl>`** - definition lists pass through that converter
   as raw HTML, which is why the record metadata is a `<ul>` with `<strong>` labels.
 - **Two hidden zone settings govern this site and neither is in this repository.**
-  `content_converter` is Markdown for Agents and stays **on**; `webmcp_enabled` injected a
-  47 KB agent bridge script into every page and is **off** since 2026-09-20. Neither appears
-  in `GET /zones/{zone}/settings`, which enumerates 56 settings and lists neither: address
-  them by name, `GET|PATCH /zones/{zone}/settings/<id>`. Changing one needs a cache purge to
+  `content_converter` is Markdown for Agents and stays **on**; `webmcp_enabled` injects an
+  agent bridge script into every page and stays **off**. Neither appears
+  in `GET /zones/{zone}/settings`: address them by name, `GET|PATCH /zones/{zone}/settings/<id>`. Changing one needs a cache purge to
   reach already-cached HTML. Turning off the wrong one removes the Markdown representations
   the agent-facing work depends on. The deploy workflow probes `/.webmcp/bridge.js` after
   every release and expects a 404.
