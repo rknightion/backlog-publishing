@@ -341,6 +341,77 @@ export function sourceDate(meta: TrackerMeta): Date | null {
   return null;
 }
 
+/** A tracker ID that more than one record claimed, and how it was resolved. */
+export interface DuplicateId {
+  /** The ID exactly as the record that is published spells it. */
+  id: string;
+  /** `sourcePath` of the record that is published. */
+  kept: string;
+  /** `sourcePath` of the record that is withheld. */
+  dropped: string;
+}
+
+/**
+ * Collapse records that claim the same ID, reporting every collapse.
+ *
+ * An ID is a URL segment, so two records sharing one produce two pages at one
+ * address. `assertUniqueIds` catches that, but it catches it by aborting the
+ * whole content sync, and the site publishes 27 trackers it does not control:
+ * one third party reusing an ID takes the entire deploy down. Publishing one
+ * page per ID is the invariant that actually matters, so it is enforced here
+ * by construction, and `assertUniqueIds` stays on as the post-condition that
+ * proves the enforcement worked.
+ *
+ * The winner is the record the tracker touched most recently (`sourceDate`),
+ * then one it marked completed, then the lower source path so the result never
+ * depends on directory order. Callers are expected to surface the reported
+ * duplicates: a collapse means an upstream tracker reused an ID, which is
+ * worth seeing rather than silently repairing.
+ */
+export function dedupeRecords(records: TrackerRecord[]): {
+  records: TrackerRecord[];
+  duplicates: DuplicateId[];
+} {
+  const winners = new Map<string, TrackerRecord>();
+  const duplicates: DuplicateId[] = [];
+
+  for (const record of records) {
+    const key = record.id.toLowerCase();
+    const incumbent = winners.get(key);
+    if (!incumbent) {
+      winners.set(key, record);
+      continue;
+    }
+    const [keep, drop] = prefer(record, incumbent)
+      ? [record, incumbent]
+      : [incumbent, record];
+    winners.set(key, keep);
+    duplicates.push({
+      id: keep.id,
+      kept: keep.sourcePath,
+      dropped: drop.sourcePath,
+    });
+  }
+
+  return {
+    records: records.filter(
+      (record) => winners.get(record.id.toLowerCase()) === record,
+    ),
+    duplicates,
+  };
+}
+
+/** Whether `candidate` should be published in place of `incumbent`. */
+function prefer(candidate: TrackerRecord, incumbent: TrackerRecord): boolean {
+  const a = sourceDate(candidate.meta);
+  const b = sourceDate(incumbent.meta);
+  if (a && b && a.getTime() !== b.getTime()) return a.getTime() > b.getTime();
+  if (a && !b) return true;
+  if (!a && b) return false;
+  if (candidate.completed !== incumbent.completed) return candidate.completed;
+  return candidate.sourcePath < incumbent.sourcePath;
+}
+
 /** Guard against two records claiming the same URL within one project. */
 export function assertUniqueIds(
   project: string,

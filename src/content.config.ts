@@ -1,6 +1,7 @@
 import { defineCollection, z } from "astro:content";
 import {
   assertUniqueIds,
+  dedupeRecords,
   deriveColumns,
   loadManifest,
   milestoneResolver,
@@ -11,7 +12,6 @@ import {
   urlSegment,
   asList,
   asText,
-  type TrackerRecord,
 } from "./lib/backlog";
 import { resolveLinks } from "./lib/rehype-backlog-links.mjs";
 
@@ -106,9 +106,17 @@ function recordCollection(
           const milestones = readRecords(repo.name, "milestones");
           const resolver = milestoneResolver(milestones);
 
-          const records: TrackerRecord[] = folders.flatMap((f) =>
-            readRecords(repo.name, f),
+          const { records, duplicates } = dedupeRecords(
+            folders.flatMap((f) => readRecords(repo.name, f)),
           );
+          // Loud, because a collapse means an upstream tracker reused an ID
+          // and the record it displaced is not published anywhere.
+          for (const duplicate of duplicates) {
+            console.warn(
+              `${repo.name}: duplicate tracker ID ${duplicate.id}; ` +
+                `publishing ${duplicate.kept}, withholding ${duplicate.dropped}`,
+            );
+          }
           assertUniqueIds(repo.name, records);
 
           // Every record this project publishes, in any collection, so link
