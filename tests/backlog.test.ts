@@ -7,6 +7,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   deriveColumns,
+  dedupeRecords,
   milestoneResolver,
   sourceDate,
   asList,
@@ -121,6 +122,71 @@ test("asList normalises a scalar, a list and an absent value", () => {
 test("assertUniqueIds catches two records claiming one URL", () => {
   const records = [record({ id: "T-1" }), record({ id: "t-1" })];
   assert.throws(() => assertUniqueIds("demo", records), /duplicate/i);
+});
+
+test("dedupeRecords keeps the most recently touched of two records", () => {
+  const older = record({
+    id: "GTO-0009",
+    meta: { created_date: "2026-09-25 08:05" },
+    sourcePath: "backlog/tasks/gto-0009 - Prune-tautological-tests.md",
+  });
+  const newer = record({
+    id: "GTO-0009",
+    meta: { updated_date: "2026-09-26 17:13" },
+    sourcePath: "backlog/tasks/gto-0009 - CI-hygiene.md",
+  });
+
+  const { records, duplicates } = dedupeRecords([older, newer]);
+  assert.equal(records.length, 1);
+  assert.equal(records[0].sourcePath, newer.sourcePath);
+  assert.deepEqual(duplicates, [
+    {
+      id: "GTO-0009",
+      kept: newer.sourcePath,
+      dropped: older.sourcePath,
+    },
+  ]);
+});
+
+test("dedupeRecords matches IDs case-insensitively and reports the ID it keeps", () => {
+  const upper = record({ id: "T-1", sourcePath: "backlog/tasks/T-1.md" });
+  const lower = record({ id: "t-1", sourcePath: "backlog/tasks/t-1.md" });
+  const { records, duplicates } = dedupeRecords([upper, lower]);
+  assert.equal(records.length, 1);
+  assert.equal(duplicates.length, 1);
+  assert.equal(duplicates[0].id, records[0].id);
+});
+
+test("dedupeRecords is order-independent and leaves distinct IDs alone", () => {
+  const a = record({
+    id: "A-1",
+    meta: { created_date: "2026-01-02 00:00" },
+    sourcePath: "backlog/tasks/A-1 - newer.md",
+  });
+  const b = record({
+    id: "A-1",
+    meta: { created_date: "2026-01-01 00:00" },
+    sourcePath: "backlog/tasks/A-1 - older.md",
+  });
+  const c = record({ id: "A-2", sourcePath: "backlog/tasks/A-2.md" });
+
+  const forward = dedupeRecords([a, b, c]).records;
+  const backward = dedupeRecords([c, b, a]).records;
+  assert.deepEqual(
+    forward.map((r) => r.sourcePath).sort(),
+    backward.map((r) => r.sourcePath).sort(),
+  );
+  assert.deepEqual(forward.map((r) => r.sourcePath).sort(), [
+    "backlog/tasks/A-1 - newer.md",
+    "backlog/tasks/A-2.md",
+  ]);
+});
+
+test("dedupeRecords prefers a completed record when the dates tie", () => {
+  const open = record({ id: "T-2", completed: false, sourcePath: "b" });
+  const done = record({ id: "T-2", completed: true, sourcePath: "a" });
+  assert.equal(dedupeRecords([open, done]).records[0].sourcePath, "a");
+  assert.equal(dedupeRecords([done, open]).records[0].sourcePath, "a");
 });
 
 test("sourceDate falls back to a decision's `date`, which is its only date", () => {
