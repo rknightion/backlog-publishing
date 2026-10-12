@@ -8,12 +8,28 @@ interface Props {
   showProject?: boolean;
   /** Fleet-wide pages span statuses that a single board splits into columns. */
   showStatus?: boolean;
+  /** Adds Sort and Order controls and a sortable table view. */
+  sortable?: boolean;
+  /** The sort the server rendered the cards in; only read when `sortable`. */
+  defaultSort?: string;
 }
 
-const { showProject = false, showStatus = false } = Astro.props;
+const {
+  showProject = false,
+  showStatus = false,
+  sortable = false,
+  defaultSort = "id",
+} = Astro.props;
 ---
 
-<form class="filters" hidden aria-label="Filter tasks" data-board-filters>
+<form
+  class="filters"
+  hidden
+  aria-label="Filter tasks"
+  data-board-filters
+  data-sortable={sortable ? "true" : undefined}
+  data-default-sort={defaultSort}
+>
   <label>
     Find a task
     <input name="q" type="search" placeholder="Search ID or title" autocomplete="off" />
@@ -54,15 +70,45 @@ const { showProject = false, showStatus = false } = Astro.props;
     Milestone
     <select name="milestone"><option value="">All milestones</option></select>
   </label>
+  {
+    sortable && (
+      <>
+        <label>
+          Sort
+          <select name="sort" data-control>
+            <option value="id">ID</option>
+            <option value="title">Title</option>
+            {showProject && <option value="project">Project</option>}
+            <option value="status">Status</option>
+            <option value="priority">Priority</option>
+            <option value="type">Type</option>
+            <option value="milestone">Milestone</option>
+            <option value="acceptance">Acceptance progress</option>
+            <option value="created">Recently created</option>
+            <option value="updated">Recently updated</option>
+          </select>
+        </label>
+        <label>
+          Order
+          <select name="dir" data-control>
+            <option value="">Default</option>
+            <option value="reverse">Reversed</option>
+          </select>
+        </label>
+      </>
+    )
+  }
   <div class="filter-actions">
     <button type="reset">Clear</button>
-    <button type="button" data-view-toggle aria-pressed="false">List view</button>
+    <button type="button" data-view-toggle aria-pressed="false">{sortable ? "Card view" : "List view"}</button>
   </div>
 </form>
 <p class="results" role="status" aria-live="polite" hidden data-board-results></p>
 <p class="results" hidden data-board-empty>No tasks match these filters. Clear them to see all tasks.</p>
 
 <script>
+  import { compareItems, isDescending, type BrowseItem } from "../lib/browse";
+
   function init() {
     const form = document.querySelector<HTMLFormElement>("[data-board-filters]");
     const board = document.querySelector<HTMLElement>("[data-board]");
@@ -73,9 +119,18 @@ const { showProject = false, showStatus = false } = Astro.props;
     const toggle = form.querySelector<HTMLButtonElement>("[data-view-toggle]");
     if (!results || !empty || !toggle) return;
 
+    const sortable = form.dataset.sortable === "true";
+    const defaultSort = form.dataset.defaultSort ?? "id";
+    const statusOrder: string[] = board.dataset.statusOrder
+      ? JSON.parse(board.dataset.statusOrder)
+      : [];
+
     // Derived from the form rather than hard-coded, so a page that renders one
-    // more facet does not also need this script edited to notice it.
-    const selects = Array.from(form.querySelectorAll<HTMLSelectElement>("select"));
+    // more facet does not also need this script edited to notice it. Sort and
+    // Order are controls, not facets: they never filter a card.
+    const selects = Array.from(
+      form.querySelectorAll<HTMLSelectElement>("select:not([data-control])"),
+    );
     const KEYS = ["q", ...selects.map((s) => s.name)];
 
     const cards = Array.from(board.querySelectorAll<HTMLElement>("[data-task]")).map((el) => ({
@@ -85,6 +140,18 @@ const { showProject = false, showStatus = false } = Astro.props;
       values: Object.fromEntries(
         selects.map((s) => [s.name, el.dataset[s.name] ?? ""]),
       ) as Record<string, string>,
+      item: {
+        id: el.dataset.id ?? "",
+        project: el.dataset.project ?? "",
+        title: el.dataset.title ?? "",
+        priority: el.dataset.priority ?? "",
+        status: el.dataset.status ?? "",
+        type: el.dataset.type ?? "",
+        milestone: el.dataset.milestone ?? "Unassigned",
+        updated: el.dataset.updated ?? "",
+        created: el.dataset.created ?? "",
+        acceptance: el.dataset.acceptance ? Number(el.dataset.acceptance) : null,
+      } as BrowseItem,
     }));
 
     for (const select of selects) {
@@ -97,21 +164,112 @@ const { showProject = false, showStatus = false } = Astro.props;
       ]
         .filter(Boolean)
         .sort();
+      // A status reads in workflow order where the page says what that is.
+      if (select.name === "status" && statusOrder.length) {
+        const rank = (v: string) => {
+          const i = statusOrder.indexOf(v);
+          return i < 0 ? statusOrder.length : i;
+        };
+        values.sort((a, b) => rank(a) - rank(b));
+      }
       for (const value of values) select.add(new Option(value, value));
     }
 
     const field = (key: string) => form.elements.namedItem(key) as HTMLInputElement;
 
+    // The view a page opens in: the board on a project page, a list on the
+    // fleet-wide ones, a table on a sortable one.
+    const pageDefault = board.dataset.defaultView;
+    const fallback = pageDefault === "list" || pageDefault === "table" ? pageDefault : "board";
+    const views = sortable ? ["list", "table"] : ["list", "board"];
+
     function readURL() {
       const params = new URL(location.href).searchParams;
       for (const key of KEYS) field(key).value = params.get(key) ?? "";
+      if (sortable) {
+        const sort = field("sort");
+        sort.value = params.get("sort") ?? defaultSort;
+        if ((sort as unknown as HTMLSelectElement).selectedIndex < 0) sort.value = defaultSort;
+        field("dir").value = params.get("dir") === "reverse" ? "reverse" : "";
+      }
       // Fall back to whatever the page rendered, not to "board": the
       // fleet-wide pages have one column and are a list by design, and
       // hard-coding the fallback flipped them the moment this script ran.
-      const fallback = board!.dataset.defaultView === "list" ? "list" : "board";
-      const asked = params.get("view");
-      board!.dataset.view =
-        asked === "list" ? "list" : asked === "board" ? "board" : fallback;
+      const asked = params.get("view") ?? "";
+      board!.dataset.view = views.includes(asked) ? asked : fallback;
+    }
+
+    function renderTable(
+      visible: typeof cards,
+      sort: string,
+      reverse: boolean,
+    ) {
+      const showProject = !!form!.querySelector('select[name="project"]');
+      const columns: [string, string][] = [
+        ["Task", "id"],
+        ...(showProject ? ([["Project", "project"]] as [string, string][]) : []),
+        ["Status", "status"],
+        ["Priority", "priority"],
+        ["Type", "type"],
+        ["Milestone", "milestone"],
+        ["AC", "acceptance"],
+        ["Created", "created"],
+        ["Updated", "updated"],
+      ];
+      const table = document.createElement("table");
+      table.className = "browse-table";
+      table.createCaption().textContent = "Tasks";
+      const header = table.createTHead().insertRow();
+      for (const [name, key] of columns) {
+        const th = document.createElement("th");
+        th.scope = "col";
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "sort-header";
+        button.dataset.sortKey = key;
+        button.textContent = name;
+        if (key === sort) {
+          const descending = isDescending(key, reverse);
+          th.setAttribute("aria-sort", descending ? "descending" : "ascending");
+          const arrow = document.createElement("span");
+          arrow.setAttribute("aria-hidden", "true");
+          arrow.textContent = descending ? " \u2193" : " \u2191";
+          button.append(arrow);
+        }
+        th.append(button);
+        header.append(th);
+      }
+      const body = table.createTBody();
+      for (const { el, item } of visible) {
+        const row = body.insertRow();
+        const link = document.createElement("a");
+        link.href = el.getAttribute("href") ?? "#";
+        link.textContent = `${el.querySelector(".id")?.textContent ?? ""} ${el.querySelector(".title")?.textContent ?? ""}`.trim();
+        row.insertCell().append(link);
+        const cells = [
+          ...(showProject ? [item.project] : []),
+          item.status,
+          item.priority,
+          item.type,
+          item.milestone === "Unassigned" ? "" : item.milestone,
+          el.dataset.acLabel ?? "",
+          (item.created ?? "").slice(0, 10),
+          item.updated.slice(0, 10),
+        ];
+        for (const value of cells) row.insertCell().textContent = value || "Not recorded";
+      }
+      let scroll = board!.querySelector<HTMLElement>("[data-table]");
+      if (!scroll) {
+        scroll = document.createElement("div");
+        scroll.className = "table-scroll";
+        scroll.dataset.table = "";
+        scroll.tabIndex = 0;
+        scroll.setAttribute("role", "region");
+        scroll.setAttribute("aria-label", "Tasks table");
+        board!.append(scroll);
+      }
+      scroll.hidden = false;
+      scroll.replaceChildren(table);
     }
 
     function update(writeURL = true) {
@@ -136,6 +294,20 @@ const { showProject = false, showStatus = false } = Astro.props;
         if (visible) shown++;
       }
 
+      const sort = sortable ? field("sort").value : defaultSort;
+      const reverse = sortable && field("dir").value === "reverse";
+      if (sortable) {
+        const sorted = [...cards].sort((a, b) =>
+          compareItems(a.item, b.item, sort, { reverse, statusOrder }),
+        );
+        // Reordering the real cards keeps the card view in step with the table.
+        for (const { el } of sorted) el.parentElement?.append(el);
+        const scroll = board!.querySelector<HTMLElement>("[data-table]");
+        if (board!.dataset.view === "table")
+          renderTable(sorted.filter((c) => !c.el.hidden), sort, reverse);
+        else if (scroll) scroll.hidden = true;
+      }
+
       for (const column of board!.querySelectorAll<HTMLElement>(".column")) {
         const count = column.querySelectorAll("[data-task]:not([hidden])").length;
         const badge = column.querySelector("[data-column-count]");
@@ -146,9 +318,12 @@ const { showProject = false, showStatus = false } = Astro.props;
       results!.textContent = `${shown} of ${cards.length} tasks shown`;
       empty!.hidden = shown !== 0;
 
-      const list = board!.dataset.view === "list";
+      const view = board!.dataset.view;
+      const list = view === "list";
       toggle!.setAttribute("aria-pressed", String(list));
-      toggle!.textContent = list ? "Board view" : "List view";
+      toggle!.textContent = sortable
+        ? view === "table" ? "Card view" : "Table view"
+        : list ? "Board view" : "List view";
 
       if (writeURL) {
         const url = new URL(location.href);
@@ -156,13 +331,15 @@ const { showProject = false, showStatus = false } = Astro.props;
           if (filter[key]) url.searchParams.set(key, filter[key]);
           else url.searchParams.delete(key);
         }
-        // Only record a view that differs from the page's own default, so a
-        // shared URL carries a deliberate choice rather than the status quo.
-        const fallback = board!.dataset.defaultView === "list" ? "list" : "board";
-        if ((list ? "list" : "board") !== fallback) {
-          url.searchParams.set("view", list ? "list" : "board");
-        } else {
-          url.searchParams.delete("view");
+        // Only record what differs from the page's own default, so a shared
+        // URL carries a deliberate choice rather than the status quo.
+        if (view !== fallback && view) url.searchParams.set("view", view);
+        else url.searchParams.delete("view");
+        if (sortable) {
+          if (sort !== defaultSort) url.searchParams.set("sort", sort);
+          else url.searchParams.delete("sort");
+          if (reverse) url.searchParams.set("dir", "reverse");
+          else url.searchParams.delete("dir");
         }
         // replaceState, not pushState: pushState would add one Back stop per
         // keystroke and make the back button useless.
@@ -173,11 +350,33 @@ const { showProject = false, showStatus = false } = Astro.props;
     form.addEventListener("submit", (e) => e.preventDefault());
     form.addEventListener("input", () => update());
     form.addEventListener("change", () => update());
-    // A reset fires before the fields clear, so re-filter on the next tick.
-    form.addEventListener("reset", () => setTimeout(() => update(), 0));
-    toggle.addEventListener("click", () => {
-      board.dataset.view = board.dataset.view === "list" ? "board" : "list";
+    // Clear empties the filters only. A native reset would also put Sort and
+    // Order back, and a reader who sorted then filtered did not ask for that.
+    form.addEventListener("reset", (e) => {
+      e.preventDefault();
+      for (const key of KEYS) field(key).value = "";
       update();
+    });
+    toggle.addEventListener("click", () => {
+      board.dataset.view = sortable
+        ? board.dataset.view === "table" ? "list" : "table"
+        : board.dataset.view === "list" ? "board" : "list";
+      update();
+    });
+    board.addEventListener("click", (event) => {
+      const button = (event.target as Element).closest<HTMLButtonElement>("[data-sort-key]");
+      if (!button || !sortable) return;
+      const key = button.dataset.sortKey ?? "id";
+      const sortField = field("sort");
+      const dirField = field("dir");
+      if (sortField.value === key) dirField.value = dirField.value === "reverse" ? "" : "reverse";
+      else {
+        sortField.value = key;
+        dirField.value = "";
+      }
+      update();
+      // The table was rebuilt, so put focus back on the heading just pressed.
+      board.querySelector<HTMLElement>(`[data-sort-key="${key}"]`)?.focus();
     });
     window.addEventListener("popstate", () => {
       readURL();

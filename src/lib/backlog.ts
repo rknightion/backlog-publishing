@@ -312,11 +312,18 @@ export function milestoneResolver(milestones: TrackerRecord[]) {
  * have no git history of their own, which is also why the ingest is allowed to
  * clone shallowly.
  */
-export function sourceDate(meta: TrackerMeta): Date | null {
+export function sourceDate(
+  meta: TrackerMeta,
+  keys: readonly ("updated_date" | "created_date" | "date")[] = [
+    "updated_date",
+    "created_date",
+    "date",
+  ],
+): Date | null {
   // `date` is last because only decisions carry it, and they carry nothing
   // else: a decision has no updated_date, so without this every decision is
   // undated and any page that indexes them has no lastmod to report.
-  for (const key of ["updated_date", "created_date", "date"] as const) {
+  for (const key of keys) {
     // A bare `2026-01-01` is a Date under js-yaml 4's schema and a string
     // under 5's. Take the Date as given rather than stringifying it: its
     // `String()` form is `Thu Jan 01 2026 ...`, which the normalisation below

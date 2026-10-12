@@ -64,6 +64,12 @@ export const GET: APIRoute = async ({ site }) => {
       // so a tracker whose only recent change was a document has still moved.
       lastmod: project.data.lastActivity,
     });
+    if (mine.length) {
+      entries.push({
+        path: `/${base}/all/`,
+        lastmod: newest(mine.map((t) => t.data.lastmod)),
+      });
+    }
     if (done.length) {
       entries.push({
         path: `/${base}/completed/`,

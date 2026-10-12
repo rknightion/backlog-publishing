@@ -167,6 +167,7 @@ function recordCollection(
                 sourcePath: record.sourcePath,
                 repoUrl: repo.url,
                 lastmod: sourceDate(record.meta),
+                created: sourceDate(record.meta, ["created_date"]),
               },
               filePath: `.backlog-cache/${repo.name}/${record.sourcePath}`,
             });
@@ -225,6 +226,8 @@ function recordCollection(
       sourcePath: z.string(),
       repoUrl: z.string().url(),
       lastmod: dateOrNull,
+      /** `created_date` alone, where `lastmod` falls back to it. */
+      created: dateOrNull,
     }),
   });
 }

@@ -18,6 +18,12 @@ const open = tasks
   );
 
 const projects = new Set(open.map((t) => t.data.project));
+
+// Statuses sort in workflow order. Projects name their own columns, so take the
+// first project's order and append what the others add, in the order seen.
+const statusOrder = [
+  ...new Set((await getCollection("projects")).flatMap((p) => p.data.columns)),
+];
 ---
 
 <Base
@@ -30,12 +36,18 @@ const projects = new Set(open.map((t) => t.data.project));
   <p class="lede">
     {open.length} open {open.length === 1 ? "task" : "tasks"} across {projects.size}
     {projects.size === 1 ? "tracker" : "trackers"}, most recently touched first. Filter it
-    down, or open a board for the columns.
+    down, choose a column heading to sort, or open a board for the columns.
   </p>
 
-  <BoardFilters showProject showStatus />
+  <BoardFilters showProject showStatus sortable defaultSort="updated" />
 
-  <div class="board" data-view="list" data-default-view="list" data-board>
+  <div
+    class="board"
+    data-view="list"
+    data-default-view="table"
+    data-status-order={JSON.stringify(statusOrder)}
+    data-board
+  >
     <section class="column">
       <div class="column-items">
         {
@@ -51,6 +63,8 @@ const projects = new Set(open.map((t) => t.data.project));
               type={task.data.type}
               acceptance={task.data.acceptance}
               projectLabel={task.data.project}
+              created={task.data.created}
+              updated={task.data.lastmod}
               showProject
             />
           ))

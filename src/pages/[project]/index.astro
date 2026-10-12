@@ -68,6 +68,7 @@ const jsonLd = {
 
   <p class="results">
     {project.data.openCount} open, {project.data.completedCount} completed &middot;
+    <a href={`/${project.data.path}/all/`}>All tasks</a> &middot;
     <a href={`/${project.data.path}/completed/`}>Completed work</a>
     {project.data.milestoneCount > 0 && (
       <> &middot; <a href={`/${project.data.path}/milestones/`}>Milestones</a></>

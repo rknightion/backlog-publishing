@@ -16,6 +16,9 @@ interface Props {
   acceptance?: AcceptanceProgress | null;
   /** Fleet-wide views mix projects, so the card has to say which one it is. */
   showProject?: boolean;
+  /** Read by the sortable tables. */
+  created?: Date | null;
+  updated?: Date | null;
 }
 
 const {
@@ -30,6 +33,8 @@ const {
   type = null,
   acceptance = null,
   showProject = false,
+  created = null,
+  updated = null,
 } = Astro.props;
 
 // The filter script reads these off the element. Labels go as JSON because a
@@ -48,6 +53,10 @@ const done = acceptance?.total ? acceptance.checked === acceptance.total : false
   data-type={type ?? ""}
   data-labels={JSON.stringify(labels)}
   data-milestone={milestone ?? "Unassigned"}
+  data-created={created?.toISOString() ?? ""}
+  data-updated={updated?.toISOString() ?? ""}
+  data-acceptance={acceptance?.total ? acceptance.checked / acceptance.total : ""}
+  data-ac-label={acceptance?.total ? `${acceptance.checked}/${acceptance.total}` : ""}
   data-title={title.toLowerCase()}
   data-id={taskId.toLowerCase()}
 >

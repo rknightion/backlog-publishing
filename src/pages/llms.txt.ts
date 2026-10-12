@@ -54,6 +54,9 @@ export const GET: APIRoute = async ({ site }) => {
     const base = d.path;
     const extras = [
       `board ${url(`/${base}/`)}`,
+      d.openCount + d.completedCount > 0
+        ? `all tasks ${url(`/${base}/all/`)}`
+        : "",
       d.completedCount > 0 ? `completed ${url(`/${base}/completed/`)}` : "",
       d.milestoneCount > 0 ? `milestones ${url(`/${base}/milestones/`)}` : "",
       d.docCount > 0 ? `documents ${url(`/${base}/docs/`)}` : "",

@@ -372,6 +372,54 @@ if (claimedImages.size === 0) {
   console.log(`  ${claimedImages.size} link preview images render text`);
 }
 
+// 13. The all-tasks pages. Each is a table built by script from server-rendered
+//     cards, so the cards are what a crawler and a no-JS reader get. Assert
+//     the count against the board and completed pages rather than for "some":
+//     a page that dropped completed work, or listed it twice, still looks full.
+const taskCount = (rel) => {
+  const html = contents.get(path.join(DIST, rel));
+  return html === undefined ? null : (html.match(/data-task\b/g) ?? []).length;
+};
+const allMismatches = [];
+let allPages = 0;
+let allTasks = 0;
+for (const slug of projectSlugs) {
+  const all = taskCount(`${slug}/all/index.html`);
+  const board = taskCount(`${slug}/index.html`) ?? 0;
+  const done = taskCount(`${slug}/completed/index.html`) ?? 0;
+  if (board + done === 0) continue; // an empty tracker has no table
+  if (all === null) allMismatches.push(`${slug}: no all/ page`);
+  else if (all !== board + done)
+    allMismatches.push(`${slug}: ${all} cards, expected ${board + done}`);
+  else {
+    allPages++;
+    allTasks += all;
+    if (
+      !contents
+        .get(path.join(DIST, slug, "all", "index.html"))
+        .includes("data-sortable")
+    )
+      allMismatches.push(`${slug}: all/ page has no sort controls`);
+  }
+}
+if (allMismatches.length) {
+  fail(
+    `all-tasks pages disagree with the boards: ${allMismatches.slice(0, 3).join("; ")}`,
+  );
+} else if (allPages === 0) {
+  fail("no all-tasks page was checked");
+} else if (
+  !contents
+    .get(path.join(DIST, "open", "index.html"))
+    ?.includes("data-sortable")
+) {
+  fail("/open/ has no sort controls");
+} else {
+  console.log(
+    `  ${allPages} all-tasks pages render ${allTasks} cards, sortable`,
+  );
+}
+
 if (process.exitCode) {
   console.error("\nbuild checks FAILED");
 } else {

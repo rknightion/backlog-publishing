@@ -1,0 +1,87 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import TaskCard from "../../components/TaskCard.astro";
+import BoardFilters from "../../components/BoardFilters.astro";
+
+// Every task in a project, open and completed, in one sortable table. The
+// table is built from the server-rendered cards by BoardFilters; without
+// JavaScript the cards below are the page. Pagefind scoping is deliberately
+// absent, as on the other list pages: only records are indexed.
+export async function getStaticPaths() {
+  const projects = await getCollection("projects");
+  const tasks = await getCollection("tasks");
+  return projects.map((project) => ({
+    params: { project: project.data.path },
+    props: {
+      project,
+      tasks: tasks
+        .filter((t) => t.data.project === project.data.slug)
+        .sort((a, b) =>
+          a.data.taskId.localeCompare(b.data.taskId, undefined, { numeric: true }),
+        ),
+    },
+  }));
+}
+
+const { project, tasks } = Astro.props;
+const open = tasks.filter((t) => !t.data.completed).length;
+// Status sorts follow this project's workflow, with any completed-only status last.
+const statusOrder = [
+  ...new Set([
+    ...project.data.columns,
+    ...tasks.filter((t) => t.data.completed).map((t) => t.data.status),
+  ]),
+];
+---
+
+<Base
+  title={`${project.data.slug}: all tasks`}
+  description={`Every task in the ${project.data.slug} backlog, ${open} open and ${tasks.length - open} completed, sortable by any field.`}
+  image={`/og/${project.data.path}.png`}
+>
+  <p class="breadcrumb">
+    <a href="/">Projects</a> / <a href={`/${project.data.path}/`}>{project.data.slug}</a> / All tasks
+  </p>
+  <p class="eyebrow">All tasks</p>
+  <h1>{project.data.slug}</h1>
+  <p class="lede">
+    {tasks.length} {tasks.length === 1 ? "task" : "tasks"}: {open} open, {tasks.length - open} completed.
+    Choose a column heading to sort by it, and again to reverse it. Dates show the last recorded
+    change; completed tasks have no separate completion date.
+  </p>
+
+  {tasks.length > 0 && <BoardFilters showStatus sortable defaultSort="id" />}
+
+  <div
+    class="board"
+    data-view="list"
+    data-default-view="table"
+    data-status-order={JSON.stringify(statusOrder)}
+    data-board
+  >
+    <section class="column" aria-label="All tasks">
+      <div class="column-items">
+        {
+          tasks.map((task) => (
+            <TaskCard
+              project={task.data.projectPath}
+              taskId={task.data.taskId}
+              title={task.data.title}
+              status={task.data.status}
+              priority={task.data.priority}
+              labels={task.data.labels}
+              milestone={task.data.milestone}
+              type={task.data.type}
+              acceptance={task.data.acceptance}
+              created={task.data.created}
+              updated={task.data.lastmod}
+            />
+          ))
+        }
+      </div>
+    </section>
+  </div>
+
+  {tasks.length === 0 && <p class="lede">No tasks yet.</p>}
+</Base>

@@ -281,3 +281,18 @@ test("sourceDate skips an invalid Date and falls through to the next key", () =>
     "2026-01-02T03:04:00.000Z",
   );
 });
+
+test("sourceDate with created_date only ignores a later update", () => {
+  const meta = {
+    created_date: "2026-08-01 09:00",
+    updated_date: "2026-09-01 09:00",
+  };
+  assert.equal(
+    sourceDate(meta, ["created_date"])?.toISOString(),
+    "2026-08-01T09:00:00.000Z",
+  );
+  assert.equal(
+    sourceDate({ updated_date: "2026-09-01" }, ["created_date"]),
+    null,
+  );
+});
